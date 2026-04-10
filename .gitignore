@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+
+# VS Code
+.vscode/
+
+# Alembic cache
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
