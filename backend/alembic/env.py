@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from app.models.base import Base
-from app.models import user  # import your models!
+from app.models import user, vocab_list  # import your models!
 
 
 # this is the Alembic Config object, which provides
