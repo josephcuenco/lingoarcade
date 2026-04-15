@@ -19,3 +19,12 @@ class ListResponse(BaseModel):
 class UpdateListRequest(BaseModel):
     name: str
     language: str
+
+
+class RenameLanguageRequest(BaseModel):
+    current_language: str
+    new_language: str
+
+
+class DeleteLanguageRequest(BaseModel):
+    language: str
