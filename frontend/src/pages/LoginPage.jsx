@@ -10,8 +10,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setError("");
 
     try {
@@ -32,7 +32,7 @@ export default function LoginPage() {
             type="email"
             placeholder="Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(event) => setEmail(event.target.value)}
             required
             style={{ width: "100%", padding: "0.75rem" }}
           />
@@ -43,7 +43,7 @@ export default function LoginPage() {
             type="password"
             placeholder="Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(event) => setPassword(event.target.value)}
             required
             style={{ width: "100%", padding: "0.75rem" }}
           />
@@ -55,7 +55,7 @@ export default function LoginPage() {
       {error && <p style={{ color: "red" }}>{error}</p>}
 
       <p style={{ marginTop: "1rem" }}>
-        Don’t have an account? <Link to="/register">Register</Link>
+        Don't have an account? <Link to="/register">Register</Link>
       </p>
     </div>
   );

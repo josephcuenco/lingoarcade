@@ -1,12 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import "./App.css";
 import AuthProvider from "./auth/AuthProvider";
 import ProtectedRoute from "./auth/ProtectedRoute";
+import ListsPage from "./pages/ListsPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-
-function ListsPage() {
-  return <h1>Lists page coming next</h1>;
-}
 
 export default function App() {
   return (
@@ -24,6 +22,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
