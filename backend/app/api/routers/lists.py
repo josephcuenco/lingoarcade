@@ -7,15 +7,33 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.vocab_list import VocabularyList
+from app.models.vocab_word import VocabularyWord
 from app.schemas.list import (
+    CreateWordRequest,
     CreateListRequest,
     DeleteLanguageRequest,
     ListResponse,
     RenameLanguageRequest,
+    UpdateWordRequest,
     UpdateListRequest,
+    WordResponse,
 )
 
 router = APIRouter(prefix="/lists", tags=["lists"])
+
+
+def get_owned_list_or_404(db: Session, user_id, list_id: UUID) -> VocabularyList:
+    vocab_list = db.scalar(
+        select(VocabularyList).where(
+            VocabularyList.id == list_id,
+            VocabularyList.user_id == user_id,
+        )
+    )
+
+    if not vocab_list:
+        raise HTTPException(status_code=404, detail="List not found")
+
+    return vocab_list
 
 
 @router.post("", response_model=ListResponse)
@@ -62,6 +80,113 @@ def get_lists(
     ).all()
 
     return lists
+
+
+@router.get("/{list_id}/words", response_model=list[WordResponse])
+def get_words(
+    list_id: UUID,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    get_owned_list_or_404(db, user.id, list_id)
+
+    return db.scalars(
+        select(VocabularyWord)
+        .where(VocabularyWord.list_id == list_id)
+        .order_by(VocabularyWord.created_at.desc())
+    ).all()
+
+
+@router.post("/{list_id}/words", response_model=WordResponse)
+def create_word(
+    list_id: UUID,
+    payload: CreateWordRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    get_owned_list_or_404(db, user.id, list_id)
+
+    existing_word = db.scalar(
+        select(VocabularyWord).where(
+            VocabularyWord.list_id == list_id,
+            VocabularyWord.term == payload.term.strip(),
+        )
+    )
+    if existing_word:
+        raise HTTPException(status_code=400, detail="Word already exists in this deck")
+
+    word = VocabularyWord(
+        list_id=list_id,
+        term=payload.term.strip(),
+        definition=payload.definition.strip(),
+    )
+    db.add(word)
+    db.commit()
+    db.refresh(word)
+
+    return word
+
+
+@router.put("/{list_id}/words/{word_id}", response_model=WordResponse)
+def update_word(
+    list_id: UUID,
+    word_id: UUID,
+    payload: UpdateWordRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    get_owned_list_or_404(db, user.id, list_id)
+
+    word = db.scalar(
+        select(VocabularyWord).where(
+            VocabularyWord.id == word_id,
+            VocabularyWord.list_id == list_id,
+        )
+    )
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    next_term = payload.term.strip()
+    existing_word = db.scalar(
+        select(VocabularyWord).where(
+            VocabularyWord.list_id == list_id,
+            VocabularyWord.term == next_term,
+            VocabularyWord.id != word_id,
+        )
+    )
+    if existing_word:
+        raise HTTPException(status_code=400, detail="Word already exists in this deck")
+
+    word.term = next_term
+    word.definition = payload.definition.strip()
+    db.commit()
+    db.refresh(word)
+
+    return word
+
+
+@router.delete("/{list_id}/words/{word_id}")
+def delete_word(
+    list_id: UUID,
+    word_id: UUID,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    get_owned_list_or_404(db, user.id, list_id)
+
+    word = db.scalar(
+        select(VocabularyWord).where(
+            VocabularyWord.id == word_id,
+            VocabularyWord.list_id == list_id,
+        )
+    )
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    db.delete(word)
+    db.commit()
+
+    return {"message": "Word deleted successfully"}
 
 
 @router.post("/languages/rename", response_model=list[ListResponse])
@@ -164,15 +289,7 @@ def update_list(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    vocab_list = db.scalar(
-        select(VocabularyList).where(
-            VocabularyList.id == list_id,
-            VocabularyList.user_id == user.id
-        )
-    )
-
-    if not vocab_list:
-        raise HTTPException(status_code=404, detail="List not found")
+    vocab_list = get_owned_list_or_404(db, user.id, list_id)
 
     # Only check duplicates if name changed
     if payload.name != vocab_list.name:
@@ -206,15 +323,7 @@ def delete_list(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    vocab_list = db.scalar(
-        select(VocabularyList).where(
-            VocabularyList.id == list_id,
-            VocabularyList.user_id == user.id
-        )
-    )
-
-    if not vocab_list:
-        raise HTTPException(status_code=404, detail="List not found")
+    vocab_list = get_owned_list_or_404(db, user.id, list_id)
 
     db.delete(vocab_list)
     db.commit()

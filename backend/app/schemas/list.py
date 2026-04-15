@@ -21,6 +21,25 @@ class UpdateListRequest(BaseModel):
     language: str
 
 
+class WordResponse(BaseModel):
+    id: UUID
+    term: str
+    definition: str
+
+    class Config:
+        from_attributes = True
+
+
+class CreateWordRequest(BaseModel):
+    term: str
+    definition: str
+
+
+class UpdateWordRequest(BaseModel):
+    term: str
+    definition: str
+
+
 class RenameLanguageRequest(BaseModel):
     current_language: str
     new_language: str

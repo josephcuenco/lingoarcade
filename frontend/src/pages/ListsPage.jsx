@@ -3,8 +3,13 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../auth/useAuth";
 
-const emptyForm = {
+const emptyDeckForm = {
   name: "",
+};
+
+const emptyWordForm = {
+  term: "",
+  definition: "",
 };
 
 const fieldStyle = {
@@ -20,6 +25,22 @@ const inputStyle = {
   padding: "14px 16px",
   background: "rgba(255,255,255,0.08)",
   color: "inherit",
+};
+
+const lightInputStyle = {
+  width: "100%",
+  borderRadius: "16px",
+  border: "1px solid rgba(23,32,51,0.12)",
+  padding: "14px 16px",
+  background: "rgba(255,255,255,0.9)",
+  color: "#172033",
+};
+
+const textareaStyle = {
+  ...lightInputStyle,
+  minHeight: "96px",
+  resize: "vertical",
+  fontFamily: "inherit",
 };
 
 const primaryButtonStyle = {
@@ -67,7 +88,12 @@ export default function ListsPage() {
   const { logout } = useAuth();
   const [lists, setLists] = useState([]);
   const [languages, setLanguages] = useState([]);
-  const [form, setForm] = useState(emptyForm);
+  const [deckForm, setDeckForm] = useState(emptyDeckForm);
+  const [expandedDeckId, setExpandedDeckId] = useState(null);
+  const [wordsByDeck, setWordsByDeck] = useState({});
+  const [wordFormsByDeck, setWordFormsByDeck] = useState({});
+  const [editingWordByDeck, setEditingWordByDeck] = useState({});
+  const [loadingWordsByDeck, setLoadingWordsByDeck] = useState({});
   const [activeLanguage, setActiveLanguage] = useState("");
   const [newLanguage, setNewLanguage] = useState("");
   const [showAddLanguage, setShowAddLanguage] = useState(false);
@@ -146,8 +172,8 @@ export default function ListsPage() {
     navigate("/login", { replace: true });
   };
 
-  const resetForm = () => {
-    setForm(emptyForm);
+  const resetDeckForm = () => {
+    setDeckForm(emptyDeckForm);
     setEditingId(null);
   };
 
@@ -164,14 +190,164 @@ export default function ListsPage() {
     setActiveLanguage(nextLanguages[0] || "");
   };
 
-  const handleChange = (event) => {
+  const setWordFormForDeck = (deckId, form) => {
+    setWordFormsByDeck((currentForms) => ({
+      ...currentForms,
+      [deckId]: form,
+    }));
+  };
+
+  const resetWordForm = (deckId) => {
+    setWordFormForDeck(deckId, emptyWordForm);
+    setEditingWordByDeck((currentEditing) => ({
+      ...currentEditing,
+      [deckId]: null,
+    }));
+  };
+
+  const handleDeckFormChange = (event) => {
     const { name, value } = event.target;
-    setForm((currentForm) => ({ ...currentForm, [name]: value }));
+    setDeckForm((currentForm) => ({ ...currentForm, [name]: value }));
+  };
+
+  const handleWordFormChange = (deckId, field, value) => {
+    setWordFormsByDeck((currentForms) => ({
+      ...currentForms,
+      [deckId]: {
+        ...(currentForms[deckId] || emptyWordForm),
+        [field]: value,
+      },
+    }));
+  };
+
+  const loadWords = async (deckId) => {
+    setLoadingWordsByDeck((currentLoading) => ({
+      ...currentLoading,
+      [deckId]: true,
+    }));
+
+    try {
+      const response = await api.get(`/lists/${deckId}/words`);
+      setWordsByDeck((currentWords) => ({
+        ...currentWords,
+        [deckId]: response.data,
+      }));
+    } catch (err) {
+      if (err.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      setError(err.response?.data?.detail || "We couldn't load the words for that deck.");
+    } finally {
+      setLoadingWordsByDeck((currentLoading) => ({
+        ...currentLoading,
+        [deckId]: false,
+      }));
+    }
+  };
+
+  const handleToggleDeck = async (deckId) => {
+    if (expandedDeckId === deckId) {
+      setExpandedDeckId(null);
+      return;
+    }
+
+    setExpandedDeckId(deckId);
+
+    if (!wordsByDeck[deckId]) {
+      await loadWords(deckId);
+    }
+
+    if (!wordFormsByDeck[deckId]) {
+      setWordFormForDeck(deckId, emptyWordForm);
+    }
+  };
+
+  const handleSubmitWord = async (deckId) => {
+    const currentForm = wordFormsByDeck[deckId] || emptyWordForm;
+    const payload = {
+      term: currentForm.term.trim(),
+      definition: currentForm.definition.trim(),
+    };
+
+    if (!payload.term || !payload.definition) {
+      setError("Both the word and definition are required.");
+      return;
+    }
+
+    const editingWord = editingWordByDeck[deckId];
+
+    try {
+      if (editingWord) {
+        const response = await api.put(
+          `/lists/${deckId}/words/${editingWord.id}`,
+          payload,
+        );
+        setWordsByDeck((currentWords) => ({
+          ...currentWords,
+          [deckId]: (currentWords[deckId] || []).map((word) =>
+            word.id === editingWord.id ? response.data : word,
+          ),
+        }));
+      } else {
+        const response = await api.post(`/lists/${deckId}/words`, payload);
+        setWordsByDeck((currentWords) => ({
+          ...currentWords,
+          [deckId]: [response.data, ...(currentWords[deckId] || [])],
+        }));
+      }
+
+      resetWordForm(deckId);
+      setError("");
+    } catch (err) {
+      if (err.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      setError(err.response?.data?.detail || "We couldn't save that word.");
+    }
+  };
+
+  const handleStartEditWord = (deckId, word) => {
+    setEditingWordByDeck((currentEditing) => ({
+      ...currentEditing,
+      [deckId]: word,
+    }));
+    setWordFormForDeck(deckId, {
+      term: word.term,
+      definition: word.definition,
+    });
+    setError("");
+  };
+
+  const handleDeleteWord = async (deckId, wordId) => {
+    try {
+      await api.delete(`/lists/${deckId}/words/${wordId}`);
+      setWordsByDeck((currentWords) => ({
+        ...currentWords,
+        [deckId]: (currentWords[deckId] || []).filter((word) => word.id !== wordId),
+      }));
+
+      const editingWord = editingWordByDeck[deckId];
+      if (editingWord?.id === wordId) {
+        resetWordForm(deckId);
+      }
+    } catch (err) {
+      if (err.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      setError(err.response?.data?.detail || "We couldn't delete that word.");
+    }
   };
 
   const handleLanguageSelect = (language) => {
     setActiveLanguage(language);
     setEditingId(null);
+    setExpandedDeckId(null);
     setError("");
     setLanguageMenu(null);
   };
@@ -210,6 +386,7 @@ export default function ListsPage() {
     setShowAddLanguage(false);
     setNewLanguage("");
     setEditingId(null);
+    setExpandedDeckId(null);
     setError("");
   };
 
@@ -350,8 +527,27 @@ export default function ListsPage() {
       if (editingId) {
         const editingList = lists.find((list) => list.id === editingId);
         if (editingList?.language === languageToDelete) {
-          resetForm();
+          resetDeckForm();
         }
+      }
+
+      setWordsByDeck((currentWords) => {
+        const nextWords = { ...currentWords };
+        lists
+          .filter((list) => list.language === languageToDelete)
+          .forEach((list) => {
+            delete nextWords[list.id];
+          });
+        return nextWords;
+      });
+
+      if (
+        expandedDeckId &&
+        lists.some(
+          (list) => list.id === expandedDeckId && list.language === languageToDelete,
+        )
+      ) {
+        setExpandedDeckId(null);
       }
 
       closeLanguageModal();
@@ -366,11 +562,11 @@ export default function ListsPage() {
     }
   };
 
-  const handleSubmit = async (event) => {
+  const handleSubmitDeck = async (event) => {
     event.preventDefault();
 
     if (!activeLanguage.trim()) {
-      setError("Choose a working language before creating a list.");
+      setError("Choose a working language before creating a deck.");
       return;
     }
 
@@ -378,7 +574,7 @@ export default function ListsPage() {
     setError("");
 
     const payload = {
-      name: form.name.trim(),
+      name: deckForm.name.trim(),
       language: activeLanguage.trim(),
     };
 
@@ -401,7 +597,7 @@ export default function ListsPage() {
         setActiveLanguage(response.data.language);
       }
 
-      resetForm();
+      resetDeckForm();
     } catch (err) {
       if (err.response?.status === 401) {
         handleUnauthorized();
@@ -411,24 +607,24 @@ export default function ListsPage() {
       setError(
         err.response?.data?.detail ||
           (editingId
-            ? "We couldn't update that list."
-            : "We couldn't create that list."),
+            ? "We couldn't update that deck."
+            : "We couldn't create that deck."),
       );
     } finally {
       setSaving(false);
     }
   };
 
-  const handleEdit = (list) => {
+  const handleEditDeck = (list) => {
     setActiveLanguage(list.language);
     setEditingId(list.id);
-    setForm({
+    setDeckForm({
       name: list.name,
     });
     setError("");
   };
 
-  const handleDelete = async (listId) => {
+  const handleDeleteDeck = async (listId) => {
     setError("");
 
     try {
@@ -447,7 +643,17 @@ export default function ListsPage() {
       });
 
       if (editingId === listId) {
-        resetForm();
+        resetDeckForm();
+      }
+
+      setWordsByDeck((currentWords) => {
+        const nextWords = { ...currentWords };
+        delete nextWords[listId];
+        return nextWords;
+      });
+
+      if (expandedDeckId === listId) {
+        setExpandedDeckId(null);
       }
     } catch (err) {
       if (err.response?.status === 401) {
@@ -455,7 +661,7 @@ export default function ListsPage() {
         return;
       }
 
-      setError(err.response?.data?.detail || "We couldn't delete that list.");
+      setError(err.response?.data?.detail || "We couldn't delete that deck.");
     }
   };
 
@@ -537,12 +743,13 @@ export default function ListsPage() {
             <p
               style={{
                 margin: 0,
-                maxWidth: "50ch",
+                maxWidth: "54ch",
                 color: "#4d5a73",
                 fontSize: "1.05rem",
               }}
             >
-              Switch between languages to organize your decks.
+              Switch between languages to organize your decks, then open a deck to
+              start adding words and definitions.
             </p>
             <div
               style={{
@@ -612,7 +819,7 @@ export default function ListsPage() {
           }}
         >
           <form
-            onSubmit={handleSubmit}
+            onSubmit={handleSubmitDeck}
             style={{
               background: "#172033",
               color: "#f5f7fb",
@@ -656,8 +863,8 @@ export default function ListsPage() {
               <span>Name</span>
               <input
                 name="name"
-                value={form.name}
-                onChange={handleChange}
+                value={deckForm.name}
+                onChange={handleDeckFormChange}
                 placeholder="Travel essentials"
                 required
                 disabled={!activeLanguage}
@@ -681,7 +888,7 @@ export default function ListsPage() {
               {editingId ? (
                 <button
                   type="button"
-                  onClick={resetForm}
+                  onClick={resetDeckForm}
                   style={secondaryButtonStyle}
                 >
                   Cancel
@@ -765,49 +972,250 @@ export default function ListsPage() {
               </div>
             ) : (
               <div style={{ display: "grid", gap: "14px" }}>
-                {filteredLists.map((list) => (
-                  <article
-                    key={list.id}
-                    style={{
-                      border: "1px solid rgba(23,32,51,0.1)",
-                      borderRadius: "22px",
-                      padding: "15px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: "16px",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div>
-                      <h3
+                {filteredLists.map((list) => {
+                  const isExpanded = expandedDeckId === list.id;
+                  const wordForm = wordFormsByDeck[list.id] || emptyWordForm;
+                  const editingWord = editingWordByDeck[list.id];
+                  const words = wordsByDeck[list.id] || [];
+
+                  return (
+                    <article
+                      key={list.id}
+                      style={{
+                        border: "1px solid rgba(23,32,51,0.1)",
+                        borderRadius: "22px",
+                        padding: "18px",
+                        display: "grid",
+                        gap: "16px",
+                      }}
+                    >
+                      <div
                         style={{
-                          margin: "0",
-                          fontSize: "1.3rem",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "16px",
+                          flexWrap: "wrap",
+                          alignItems: "center",
                         }}
                       >
-                        {list.name}
-                      </h3>
-                    </div>
+                        <div>
+                          <h3
+                            style={{
+                              margin: "0",
+                              fontSize: "1.3rem",
+                            }}
+                          >
+                            {list.name}
+                          </h3>
+                          <p
+                            style={{
+                              margin: "6px 0 0",
+                              color: "#4d5a73",
+                              fontSize: "0.92rem",
+                            }}
+                          >
+                            {words.length} {words.length === 1 ? "word" : "words"}
+                          </p>
+                        </div>
 
-                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleEdit(list)}
-                        style={secondaryButtonStyle}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(list.id)}
-                        style={dangerButtonStyle}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </article>
-                ))}
+                        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDeck(list.id)}
+                            style={secondaryButtonStyle}
+                          >
+                            {isExpanded ? "Hide words" : "Open words"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditDeck(list)}
+                            style={secondaryButtonStyle}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDeck(list.id)}
+                            style={dangerButtonStyle}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {isExpanded ? (
+                        <div
+                          style={{
+                            borderTop: "1px solid rgba(23,32,51,0.08)",
+                            paddingTop: "18px",
+                            display: "grid",
+                            gap: "18px",
+                          }}
+                        >
+                          <section
+                            style={{
+                              background: "#f9fbff",
+                              borderRadius: "18px",
+                              padding: "18px",
+                              display: "grid",
+                              gap: "12px",
+                            }}
+                          >
+                            <div>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  color: "#b26a00",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.12em",
+                                  fontSize: "0.75rem",
+                                }}
+                              >
+                                {editingWord ? "Editing word" : "New word"}
+                              </p>
+                              <h4 style={{ margin: "8px 0 0", fontSize: "1.2rem" }}>
+                                {editingWord
+                                  ? `Update ${editingWord.term}`
+                                  : "Add a word and definition"}
+                              </h4>
+                            </div>
+
+                            <label style={{ ...fieldStyle, color: "#4d5a73" }}>
+                              <span>Word</span>
+                              <input
+                                value={wordForm.term}
+                                onChange={(event) =>
+                                  handleWordFormChange(
+                                    list.id,
+                                    "term",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="hola"
+                                style={lightInputStyle}
+                              />
+                            </label>
+
+                            <label style={{ ...fieldStyle, color: "#4d5a73" }}>
+                              <span>Definition</span>
+                              <textarea
+                                value={wordForm.definition}
+                                onChange={(event) =>
+                                  handleWordFormChange(
+                                    list.id,
+                                    "definition",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="hello"
+                                style={textareaStyle}
+                              />
+                            </label>
+
+                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                              <button
+                                type="button"
+                                onClick={() => handleSubmitWord(list.id)}
+                                style={primaryButtonStyle}
+                              >
+                                {editingWord ? "Save word" : "Add word"}
+                              </button>
+                              {editingWord ? (
+                                <button
+                                  type="button"
+                                  onClick={() => resetWordForm(list.id)}
+                                  style={secondaryButtonStyle}
+                                >
+                                  Cancel
+                                </button>
+                              ) : null}
+                            </div>
+                          </section>
+
+                          <section style={{ display: "grid", gap: "12px" }}>
+                            {loadingWordsByDeck[list.id] ? (
+                              <p style={{ margin: 0, color: "#4d5a73" }}>
+                                Loading words...
+                              </p>
+                            ) : words.length === 0 ? (
+                              <div
+                                style={{
+                                  border: "1px dashed rgba(23,32,51,0.15)",
+                                  borderRadius: "18px",
+                                  padding: "18px",
+                                  color: "#4d5a73",
+                                }}
+                              >
+                                No words in this deck yet. Add the first one above.
+                              </div>
+                            ) : (
+                              words.map((word) => (
+                                <article
+                                  key={word.id}
+                                  style={{
+                                    border: "1px solid rgba(23,32,51,0.08)",
+                                    borderRadius: "18px",
+                                    padding: "16px",
+                                    display: "grid",
+                                    gap: "10px",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      gap: "12px",
+                                      alignItems: "start",
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
+                                    <div>
+                                      <h4 style={{ margin: 0, fontSize: "1.1rem" }}>
+                                        {word.term}
+                                      </h4>
+                                      <p
+                                        style={{
+                                          margin: "8px 0 0",
+                                          color: "#4d5a73",
+                                          whiteSpace: "pre-wrap",
+                                        }}
+                                      >
+                                        {word.definition}
+                                      </p>
+                                    </div>
+
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: "8px",
+                                        flexWrap: "wrap",
+                                      }}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => handleStartEditWord(list.id, word)}
+                                        style={secondaryButtonStyle}
+                                      >
+                                        Edit word
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteWord(list.id, word.id)}
+                                        style={dangerButtonStyle}
+                                      >
+                                        Delete word
+                                      </button>
+                                    </div>
+                                  </div>
+                                </article>
+                              ))
+                            )}
+                          </section>
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
               </div>
             )}
           </section>
