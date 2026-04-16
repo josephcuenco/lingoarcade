@@ -1,8 +1,9 @@
 :root {
-  color: #172033;
+  color: #f7f8ff;
   background:
-    radial-gradient(circle at top, rgba(255, 213, 128, 0.35), transparent 34%),
-    linear-gradient(180deg, #fffaf1 0%, #f3f7ff 42%, #eef2fb 100%);
+    radial-gradient(circle at top, rgba(255, 77, 157, 0.18), transparent 28%),
+    radial-gradient(circle at 85% 15%, rgba(72, 183, 255, 0.16), transparent 22%),
+    linear-gradient(180deg, #06070d 0%, #0d1020 42%, #101528 100%);
   font-family: Georgia, "Times New Roman", serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -26,7 +27,7 @@ input {
 }
 
 a {
-  color: #1f4db8;
+  color: #7ff5d9;
 }
 
 #root {

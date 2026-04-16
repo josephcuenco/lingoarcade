@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import AuthLayout from "../components/AuthLayout";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -23,40 +24,43 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ maxWidth: "400px", margin: "4rem auto" }}>
-      <h1>Login</h1>
+    <AuthLayout
+      title="Welcome back"
+      accent="Sign in"
+      footerText="Don't have an account?"
+      footerLink="/register"
+      footerLabel="Register"
+      form={
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <label className="auth-field">
+            <span>Email</span>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
+          </label>
 
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: "1rem" }}>
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-            style={{ width: "100%", padding: "0.75rem" }}
-          />
-        </div>
+          <label className="auth-field">
+            <span>Password</span>
+            <input
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </label>
 
-        <div style={{ marginBottom: "1rem" }}>
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            style={{ width: "100%", padding: "0.75rem" }}
-          />
-        </div>
+          {error ? <p className="auth-error">{error}</p> : null}
 
-        <button type="submit">Login</button>
-      </form>
-
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      <p style={{ marginTop: "1rem" }}>
-        Don't have an account? <Link to="/register">Register</Link>
-      </p>
-    </div>
+          <button className="auth-submit" type="submit">
+            Log in
+          </button>
+        </form>
+      }
+    />
   );
 }
