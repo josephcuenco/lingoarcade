@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import AuthProvider from "./auth/AuthProvider";
 import ProtectedRoute from "./auth/ProtectedRoute";
+import GamePage from "./pages/GamePage";
 import ListsPage from "./pages/ListsPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -19,6 +20,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <ListsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/games"
+            element={
+              <ProtectedRoute>
+                <GamePage />
               </ProtectedRoute>
             }
           />

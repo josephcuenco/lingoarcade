@@ -12,72 +12,91 @@ const emptyWordForm = {
   definition: "",
 };
 
+const createEmptyStagedWord = () => ({
+  id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  term: "",
+  definition: "",
+});
+
 const fieldStyle = {
   display: "grid",
   gap: "8px",
   fontSize: "0.95rem",
 };
 
+const textMuted = "#bfc7e6";
+const textSoft = "#cfd6ef";
+const textStrong = "#f7f8ff";
+const panelBackground =
+  "linear-gradient(180deg, rgba(17, 21, 36, 0.92), rgba(12, 15, 28, 0.92))";
+const panelBorder = "1px solid rgba(130, 151, 255, 0.18)";
+const panelShadow =
+  "0 24px 70px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04)";
+
 const inputStyle = {
   width: "100%",
   borderRadius: "16px",
-  border: "1px solid rgba(255,255,255,0.18)",
+  border: "1px solid rgba(130, 151, 255, 0.18)",
   padding: "14px 16px",
-  background: "rgba(255,255,255,0.08)",
-  color: "inherit",
+  background: "rgba(255,255,255,0.06)",
+  color: textStrong,
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
 };
 
 const lightInputStyle = {
   width: "100%",
   borderRadius: "16px",
-  border: "1px solid rgba(23,32,51,0.12)",
+  border: "1px solid rgba(130, 151, 255, 0.18)",
   padding: "14px 16px",
-  background: "rgba(255,255,255,0.9)",
-  color: "#172033",
+  background: "rgba(255,255,255,0.06)",
+  color: textStrong,
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
 };
 
-const textareaStyle = {
-  ...lightInputStyle,
-  minHeight: "96px",
-  resize: "vertical",
-  fontFamily: "inherit",
-};
+// const textareaStyle = {
+//   ...lightInputStyle,
+//   minHeight: "96px",
+//   resize: "vertical",
+//   fontFamily: "inherit",
+// };
 
 const primaryButtonStyle = {
   border: "none",
   borderRadius: "999px",
   padding: "12px 18px",
-  background: "#f9c46b",
-  color: "#172033",
+  background: "linear-gradient(135deg, #48b7ff 0%, #935dff 48%, #ff4d9d 100%)",
+  color: "#f8f5ef",
   cursor: "pointer",
+  boxShadow: "0 18px 35px rgba(112, 85, 255, 0.3)",
 };
 
 const secondaryButtonStyle = {
-  border: "1px solid rgba(23,32,51,0.16)",
+  border: "1px solid rgba(130, 151, 255, 0.18)",
   borderRadius: "999px",
   padding: "12px 18px",
-  background: "rgba(255,255,255,0.7)",
-  color: "#172033",
+  background: "rgba(255,255,255,0.06)",
+  color: textStrong,
   cursor: "pointer",
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
 };
 
 const dangerButtonStyle = {
-  border: "1px solid rgba(191, 45, 45, 0.16)",
+  border: "1px solid rgba(255, 96, 146, 0.28)",
   borderRadius: "999px",
   padding: "12px 18px",
-  background: "#fff1f1",
-  color: "#9f1f1f",
+  background: "rgba(255, 77, 157, 0.12)",
+  color: "#ffb6d7",
   cursor: "pointer",
 };
 
 const contextMenuStyle = {
   position: "fixed",
   minWidth: "180px",
-  background: "#fffdf8",
-  border: "1px solid rgba(23,32,51,0.12)",
+  background: "linear-gradient(180deg, rgba(20, 24, 42, 0.96), rgba(12, 15, 28, 0.96))",
+  border: "1px solid rgba(130, 151, 255, 0.18)",
   borderRadius: "18px",
   padding: "8px",
-  boxShadow: "0 18px 40px rgba(17, 24, 39, 0.18)",
+  boxShadow: "0 18px 40px rgba(0, 0, 0, 0.3)",
   zIndex: 20,
   display: "grid",
   gap: "6px",
@@ -93,6 +112,7 @@ export default function ListsPage() {
   const [wordsByDeck, setWordsByDeck] = useState({});
   const [wordFormsByDeck, setWordFormsByDeck] = useState({});
   const [editingWordByDeck, setEditingWordByDeck] = useState({});
+  const [showAddWordFormByDeck, setShowAddWordFormByDeck] = useState({});
   const [loadingWordsByDeck, setLoadingWordsByDeck] = useState({});
   const [activeLanguage, setActiveLanguage] = useState("");
   const [newLanguage, setNewLanguage] = useState("");
@@ -100,6 +120,10 @@ export default function ListsPage() {
   const [languageMenu, setLanguageMenu] = useState(null);
   const [languageModal, setLanguageModal] = useState(null);
   const [languageDraft, setLanguageDraft] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [showDeckModal, setShowDeckModal] = useState(false);
+  const [deckDraftWord, setDeckDraftWord] = useState(emptyWordForm);
+  const [deckDraftWords, setDeckDraftWords] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -177,9 +201,21 @@ export default function ListsPage() {
     setEditingId(null);
   };
 
+  const closeDeckModal = () => {
+    setShowDeckModal(false);
+    setDeckDraftWord(emptyWordForm);
+    setDeckDraftWords([]);
+    resetDeckForm();
+    setError("");
+  };
+
   const closeLanguageModal = () => {
     setLanguageModal(null);
     setLanguageDraft("");
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog(null);
   };
 
   const syncActiveLanguageAfterRemoval = (nextLanguages, removedLanguage) => {
@@ -203,11 +239,45 @@ export default function ListsPage() {
       ...currentEditing,
       [deckId]: null,
     }));
+    setShowAddWordFormByDeck((currentVisible) => ({
+      ...currentVisible,
+      [deckId]: false,
+    }));
   };
 
   const handleDeckFormChange = (event) => {
     const { name, value } = event.target;
     setDeckForm((currentForm) => ({ ...currentForm, [name]: value }));
+  };
+
+  const handleDeckDraftWordChange = (field, value) => {
+    setDeckDraftWord((currentDraft) => ({
+      ...currentDraft,
+      [field]: value,
+    }));
+  };
+
+  const handleAddDeckDraftWord = () => {
+    const nextWord = {
+      ...createEmptyStagedWord(),
+      term: deckDraftWord.term.trim(),
+      definition: deckDraftWord.definition.trim(),
+    };
+
+    if (!nextWord.term || !nextWord.definition) {
+      setError("Each starter word needs both a word and a translation.");
+      return;
+    }
+
+    setDeckDraftWords((currentDrafts) => [...currentDrafts, nextWord]);
+    setDeckDraftWord(emptyWordForm);
+    setError("");
+  };
+
+  const handleRemoveDeckDraftWord = (draftId) => {
+    setDeckDraftWords((currentDrafts) =>
+      currentDrafts.filter((draft) => draft.id !== draftId),
+    );
   };
 
   const handleWordFormChange = (deckId, field, value) => {
@@ -298,7 +368,12 @@ export default function ListsPage() {
         }));
       }
 
-      resetWordForm(deckId);
+      if (editingWord) {
+        resetWordForm(deckId);
+      } else {
+        setWordFormForDeck(deckId, emptyWordForm);
+      }
+
       setError("");
     } catch (err) {
       if (err.response?.status === 401) {
@@ -314,6 +389,10 @@ export default function ListsPage() {
     setEditingWordByDeck((currentEditing) => ({
       ...currentEditing,
       [deckId]: word,
+    }));
+    setShowAddWordFormByDeck((currentVisible) => ({
+      ...currentVisible,
+      [deckId]: true,
     }));
     setWordFormForDeck(deckId, {
       term: word.term,
@@ -344,6 +423,30 @@ export default function ListsPage() {
     }
   };
 
+  const handleRequestDeleteWord = (deckId, word) => {
+    setConfirmDialog({
+      title: `Delete ${word.term}?`,
+      kicker: "Delete word",
+      message: "This will permanently remove this word and its translation from the deck.",
+      confirmLabel: "Delete word",
+      onConfirm: () => handleDeleteWord(deckId, word.id),
+    });
+    setError("");
+  };
+
+  const handleOpenAddWordForm = (deckId) => {
+    setEditingWordByDeck((currentEditing) => ({
+      ...currentEditing,
+      [deckId]: null,
+    }));
+    setWordFormForDeck(deckId, emptyWordForm);
+    setShowAddWordFormByDeck((currentVisible) => ({
+      ...currentVisible,
+      [deckId]: true,
+    }));
+    setError("");
+  };
+
   const handleLanguageSelect = (language) => {
     setActiveLanguage(language);
     setEditingId(null);
@@ -358,6 +461,19 @@ export default function ListsPage() {
     setEditingId(null);
     setError("");
     setLanguageMenu(null);
+  };
+
+  const handleOpenCreateDeck = () => {
+    if (!activeLanguage.trim()) {
+      setError("Choose a working language before creating a deck.");
+      return;
+    }
+
+    resetDeckForm();
+    setDeckDraftWord(emptyWordForm);
+    setDeckDraftWords([]);
+    setShowDeckModal(true);
+    setError("");
   };
 
   const handleCloseAddLanguage = () => {
@@ -413,6 +529,14 @@ export default function ListsPage() {
     setLanguageModal({
       type: "delete",
       language: languageMenu.language,
+    });
+    setConfirmDialog({
+      title: `Delete ${languageMenu.language}?`,
+      kicker: "Delete language",
+      message:
+        "This will permanently delete the language and all decks inside it. This action cannot be undone.",
+      confirmLabel: "Delete language and decks",
+      onConfirm: handleDeleteLanguage,
     });
     setLanguageMenu(null);
     setError("");
@@ -487,6 +611,7 @@ export default function ListsPage() {
       }
 
       closeLanguageModal();
+      closeConfirmDialog();
       setError("");
     } catch (err) {
       if (err.response?.status === 401) {
@@ -551,6 +676,7 @@ export default function ListsPage() {
       }
 
       closeLanguageModal();
+      closeConfirmDialog();
       setError("");
     } catch (err) {
       if (err.response?.status === 401) {
@@ -562,19 +688,32 @@ export default function ListsPage() {
     }
   };
 
-  const handleSubmitDeck = async (event) => {
-    event.preventDefault();
-
+  const handleSubmitDeck = async () => {
     if (!activeLanguage.trim()) {
       setError("Choose a working language before creating a deck.");
       return;
     }
 
+    const trimmedName = deckForm.name.trim();
+
+    if (!trimmedName) {
+      setError("Enter a deck name first.");
+      return;
+    }
+
+    const starterWords = deckDraftWords
+      .map((draft) => ({
+        ...draft,
+        term: draft.term.trim(),
+        definition: draft.definition.trim(),
+      }))
+      .filter((draft) => draft.term || draft.definition);
+
     setSaving(true);
     setError("");
 
     const payload = {
-      name: deckForm.name.trim(),
+      name: trimmedName,
       language: activeLanguage.trim(),
     };
 
@@ -586,8 +725,18 @@ export default function ListsPage() {
             list.id === editingId ? response.data : list,
           ),
         );
+        closeDeckModal();
       } else {
         const response = await api.post("/lists", payload);
+        const createdWords = await Promise.all(
+          starterWords.map((draft) =>
+            api.post(`/lists/${response.data.id}/words`, {
+              term: draft.term,
+              definition: draft.definition,
+            }),
+          ),
+        );
+        const nextWords = createdWords.map((wordResponse) => wordResponse.data);
         setLists((currentLists) => [response.data, ...currentLists]);
         setLanguages((currentLanguages) =>
           currentLanguages.includes(response.data.language)
@@ -595,9 +744,16 @@ export default function ListsPage() {
             : [...currentLanguages, response.data.language],
         );
         setActiveLanguage(response.data.language);
+        setWordsByDeck((currentWords) => ({
+          ...currentWords,
+          [response.data.id]: nextWords,
+        }));
+        setExpandedDeckId(response.data.id);
+        if (!wordFormsByDeck[response.data.id]) {
+          setWordFormForDeck(response.data.id, emptyWordForm);
+        }
+        closeDeckModal();
       }
-
-      resetDeckForm();
     } catch (err) {
       if (err.response?.status === 401) {
         handleUnauthorized();
@@ -621,6 +777,9 @@ export default function ListsPage() {
     setDeckForm({
       name: list.name,
     });
+    setDeckDraftWord(emptyWordForm);
+    setDeckDraftWords([]);
+    setShowDeckModal(true);
     setError("");
   };
 
@@ -665,9 +824,24 @@ export default function ListsPage() {
     }
   };
 
+  const handleRequestDeleteDeck = (list) => {
+    setConfirmDialog({
+      title: `Delete ${list.name}?`,
+      kicker: "Delete deck",
+      message: "This will permanently remove the deck and all words inside it.",
+      confirmLabel: "Delete deck",
+      onConfirm: () => handleDeleteDeck(list.id),
+    });
+    setError("");
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/login", { replace: true });
+  };
+
+  const handleOpenGames = () => {
+    navigate("/games");
   };
 
   return (
@@ -692,11 +866,11 @@ export default function ListsPage() {
             alignItems: "center",
             gap: "16px",
             flexWrap: "wrap",
-            background: "rgba(255,255,255,0.75)",
-            border: "1px solid rgba(23,32,51,0.1)",
+            background: panelBackground,
+            border: panelBorder,
             borderRadius: "28px",
             padding: "28px 32px",
-            boxShadow: "0 18px 50px rgba(44, 62, 95, 0.08)",
+            boxShadow: panelShadow,
             backdropFilter: "blur(10px)",
           }}
         >
@@ -716,19 +890,28 @@ export default function ListsPage() {
                   textTransform: "uppercase",
                   letterSpacing: "0.18em",
                   fontSize: "0.78rem",
-                  color: "#b26a00",
+                  color: "#76f7d5",
                 }}
               >
                 LingoArcade
               </p>
 
-              <button
-                type="button"
-                onClick={handleLogout}
-                style={secondaryButtonStyle}
-              >
-                Log out
-              </button>
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={handleOpenGames}
+                  style={primaryButtonStyle}
+                >
+                  Game on!
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  style={secondaryButtonStyle}
+                >
+                  Log out
+                </button>
+              </div>
             </div>
 
             <h1
@@ -736,18 +919,21 @@ export default function ListsPage() {
                 margin: "8px 0 10px",
                 fontSize: "clamp(2.3rem, 6vw, 4.5rem)",
                 lineHeight: 0.95,
+                color: textStrong,
+                textShadow:
+                  "0 0 24px rgba(81, 183, 255, 0.18), 0 0 60px rgba(255, 72, 176, 0.14)",
               }}
             >
               Build your language decks.
             </h1>
             <p
-              style={{
-                margin: 0,
-                maxWidth: "54ch",
-                color: "#4d5a73",
-                fontSize: "1.05rem",
-              }}
-            >
+                style={{
+                  margin: 0,
+                  maxWidth: "54ch",
+                  color: textMuted,
+                  fontSize: "1.05rem",
+                }}
+              >
               Switch between languages to organize your decks, then open a deck to
               start adding words and definitions.
             </p>
@@ -759,7 +945,7 @@ export default function ListsPage() {
                 maxWidth: "100%",
               }}
             >
-              <div style={{ ...fieldStyle, color: "#4d5a73" }}>
+              <div style={{ ...fieldStyle, color: textSoft }}>
                 <span>Select a language</span>
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   {availableLanguages.map((language) => (
@@ -775,10 +961,18 @@ export default function ListsPage() {
                         ...secondaryButtonStyle,
                         background:
                           language === activeLanguage
-                            ? "#172033"
-                            : "rgba(255,255,255,0.7)",
+                            ? "linear-gradient(135deg, rgba(72, 183, 255, 0.24), rgba(255, 77, 157, 0.22))"
+                            : "rgba(255,255,255,0.06)",
                         color:
-                          language === activeLanguage ? "#f5f7fb" : "#172033",
+                          language === activeLanguage ? textStrong : textSoft,
+                        borderColor:
+                          language === activeLanguage
+                            ? "rgba(118, 247, 213, 0.45)"
+                            : "rgba(130, 151, 255, 0.18)",
+                        boxShadow:
+                          language === activeLanguage
+                            ? "0 0 24px rgba(118, 247, 213, 0.12)"
+                            : secondaryButtonStyle.boxShadow,
                       }}
                     >
                       {language}
@@ -798,11 +992,11 @@ export default function ListsPage() {
               </div>
 
               {availableLanguages.length === 0 ? (
-                <p style={{ margin: 0, color: "#4d5a73" }}>
+                <p style={{ margin: 0, color: textMuted }}>
                   Start by adding your first language.
                 </p>
               ) : (
-                <p style={{ margin: 0, color: "#4d5a73", fontSize: "0.92rem" }}>
+                <p style={{ margin: 0, color: textMuted, fontSize: "0.92rem" }}>
                   Right-click a language to rename it or delete it with all of its
                   decks.
                 </p>
@@ -814,110 +1008,16 @@ export default function ListsPage() {
         <section
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
             gap: "24px",
           }}
         >
-          <form
-            onSubmit={handleSubmitDeck}
-            style={{
-              background: "#172033",
-              color: "#f5f7fb",
-              borderRadius: "28px",
-              padding: "28px",
-              boxShadow: "0 22px 48px rgba(17, 24, 39, 0.18)",
-              display: "grid",
-              gap: "16px",
-              alignSelf: "start",
-            }}
-          >
-            <div>
-              <p
-                style={{
-                  margin: 0,
-                  color: "#f9c46b",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.14em",
-                  fontSize: "0.78rem",
-                }}
-              >
-                {editingId ? "Editing" : "New Deck"}
-              </p>
-              <h2 style={{ margin: "8px 0 0", fontSize: "1.8rem" }}>
-                {editingId ? "Update your deck" : "Start a fresh deck"}
-              </h2>
-              <p
-                style={{
-                  margin: "10px 0 0",
-                  color: "#c8d2e8",
-                  fontSize: "0.98rem",
-                }}
-              >
-                {activeLanguage
-                  ? `All decks created here will be added to ${activeLanguage}.`
-                  : "Choose a working language above to start organizing decks."}
-              </p>
-            </div>
-
-            <label style={fieldStyle}>
-              <span>Name</span>
-              <input
-                name="name"
-                value={deckForm.name}
-                onChange={handleDeckFormChange}
-                placeholder="Travel essentials"
-                required
-                disabled={!activeLanguage}
-                style={inputStyle}
-              />
-            </label>
-
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              <button
-                type="submit"
-                disabled={saving || !activeLanguage}
-                style={primaryButtonStyle}
-              >
-                {saving
-                  ? "Saving..."
-                  : editingId
-                    ? "Save changes"
-                    : "Create deck"}
-              </button>
-
-              {editingId ? (
-                <button
-                  type="button"
-                  onClick={resetDeckForm}
-                  style={secondaryButtonStyle}
-                >
-                  Cancel
-                </button>
-              ) : null}
-            </div>
-
-            {error ? (
-              <p
-                style={{
-                  margin: 0,
-                  padding: "12px 14px",
-                  borderRadius: "14px",
-                  background: "rgba(246, 89, 89, 0.18)",
-                  color: "#ffd6d6",
-                }}
-              >
-                {error}
-              </p>
-            ) : null}
-          </form>
-
           <section
             style={{
-              background: "rgba(255,255,255,0.82)",
-              border: "1px solid rgba(23,32,51,0.1)",
+              background: panelBackground,
+              border: panelBorder,
               borderRadius: "28px",
               padding: "28px",
-              boxShadow: "0 18px 50px rgba(44, 62, 95, 0.08)",
+              boxShadow: panelShadow,
               backdropFilter: "blur(10px)",
             }}
           >
@@ -932,27 +1032,46 @@ export default function ListsPage() {
               }}
             >
               <div>
-                <p style={{ margin: 0, color: "#b26a00", fontSize: "0.9rem" }}>
+                <p style={{ margin: 0, color: "#76f7d5", fontSize: "0.9rem" }}>
                   {activeLanguage ? `${activeLanguage} collection` : "Your collection"}
                 </p>
-                <h2 style={{ margin: "6px 0 0", fontSize: "1.9rem" }}>
+                <h2 style={{ margin: "6px 0 0", fontSize: "1.9rem", color: textStrong }}>
                   Vocabulary decks
                 </h2>
               </div>
-              <p style={{ margin: 0, color: "#4d5a73" }}>
-                {filteredLists.length} {filteredLists.length === 1 ? "deck" : "decks"}
-              </p>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <p style={{ margin: 0, color: textMuted }}>
+                  {filteredLists.length} {filteredLists.length === 1 ? "deck" : "decks"}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleOpenCreateDeck}
+                  disabled={!activeLanguage}
+                  style={primaryButtonStyle}
+                >
+                  Create deck
+                </button>
+              </div>
             </div>
 
             {loading ? (
-              <p style={{ margin: 0, color: "#4d5a73" }}>Loading your decks...</p>
+              <p style={{ margin: 0, color: textMuted }}>Loading your decks...</p>
             ) : !activeLanguage ? (
               <div
                 style={{
-                  border: "1px dashed rgba(23,32,51,0.15)",
+                  border: "1px dashed rgba(130, 151, 255, 0.22)",
                   borderRadius: "22px",
                   padding: "28px",
-                  color: "#4d5a73",
+                  color: textMuted,
+                  background: "rgba(255,255,255,0.03)",
                 }}
               >
                 Pick the language you want to work on, and this screen will focus
@@ -961,10 +1080,11 @@ export default function ListsPage() {
             ) : filteredLists.length === 0 ? (
               <div
                 style={{
-                  border: "1px dashed rgba(23,32,51,0.15)",
+                  border: "1px dashed rgba(130, 151, 255, 0.22)",
                   borderRadius: "22px",
                   padding: "28px",
-                  color: "#4d5a73",
+                  color: textMuted,
+                  background: "rgba(255,255,255,0.03)",
                 }}
               >
                 No decks for {activeLanguage} yet. Try one for verbs, travel
@@ -976,26 +1096,42 @@ export default function ListsPage() {
                   const isExpanded = expandedDeckId === list.id;
                   const wordForm = wordFormsByDeck[list.id] || emptyWordForm;
                   const editingWord = editingWordByDeck[list.id];
+                  const isWordFormVisible =
+                    showAddWordFormByDeck[list.id] || Boolean(editingWord);
                   const words = wordsByDeck[list.id] || [];
 
                   return (
                     <article
                       key={list.id}
+                      className="deck-card"
                       style={{
-                        border: "1px solid rgba(23,32,51,0.1)",
+                        border: "1px solid rgba(130, 151, 255, 0.16)",
                         borderRadius: "22px",
                         padding: "18px",
                         display: "grid",
                         gap: "16px",
+                        background:
+                          "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.03))",
+                        boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
                       }}
                     >
                       <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleToggleDeck(list.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            handleToggleDeck(list.id);
+                          }
+                        }}
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
                           gap: "16px",
                           flexWrap: "wrap",
                           alignItems: "center",
+                          cursor: "pointer",
                         }}
                       >
                         <div>
@@ -1003,6 +1139,7 @@ export default function ListsPage() {
                             style={{
                               margin: "0",
                               fontSize: "1.3rem",
+                              color: textStrong,
                             }}
                           >
                             {list.name}
@@ -1010,7 +1147,7 @@ export default function ListsPage() {
                           <p
                             style={{
                               margin: "6px 0 0",
-                              color: "#4d5a73",
+                              color: textMuted,
                               fontSize: "0.92rem",
                             }}
                           >
@@ -1018,132 +1155,167 @@ export default function ListsPage() {
                           </p>
                         </div>
 
-                        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleDeck(list.id)}
-                            style={secondaryButtonStyle}
-                          >
-                            {isExpanded ? "Hide words" : "Open words"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleEditDeck(list)}
-                            style={secondaryButtonStyle}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteDeck(list.id)}
-                            style={dangerButtonStyle}
-                          >
-                            Delete
-                          </button>
-                        </div>
+                        <p style={{ margin: 0, color: "#76f7d5", fontSize: "0.92rem" }}>
+                          {isExpanded ? "Hide deck" : "Open deck"}
+                        </p>
                       </div>
 
                       {isExpanded ? (
                         <div
                           style={{
-                            borderTop: "1px solid rgba(23,32,51,0.08)",
+                            borderTop: "1px solid rgba(130, 151, 255, 0.14)",
                             paddingTop: "18px",
                             display: "grid",
                             gap: "18px",
                           }}
                         >
-                          <section
+                          <div
                             style={{
-                              background: "#f9fbff",
-                              borderRadius: "18px",
-                              padding: "18px",
-                              display: "grid",
-                              gap: "12px",
+                              display: "flex",
+                              gap: "10px",
+                              flexWrap: "wrap",
+                              alignItems: "center",
                             }}
                           >
-                            <div>
-                              <p
-                                style={{
-                                  margin: 0,
-                                  color: "#b26a00",
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.12em",
-                                  fontSize: "0.75rem",
-                                }}
+                            <button
+                              type="button"
+                              onClick={() => handleEditDeck(list)}
+                              style={secondaryButtonStyle}
+                            >
+                              Edit Name
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRequestDeleteDeck(list)}
+                              style={dangerButtonStyle}
+                            >
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAddWordForm(list.id)}
+                              style={primaryButtonStyle}
+                            >
+                              Add word
+                            </button>
+                          </div>
+
+                          {isWordFormVisible ? (
+                            <section
+                              style={{
+                                background:
+                                  "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))",
+                                border: "1px solid rgba(130, 151, 255, 0.14)",
+                                borderRadius: "18px",
+                                padding: "18px",
+                                display: "grid",
+                                gap: "12px",
+                              }}
+                            >
+                              <div>
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    color: "#76f7d5",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.12em",
+                                    fontSize: "0.75rem",
+                                  }}
+                                >
+                                  {editingWord ? "Editing word" : "New word"}
+                                </p>
+                                <h4
+                                  style={{
+                                    margin: "8px 0 0",
+                                    fontSize: "1.2rem",
+                                    color: textStrong,
+                                  }}
+                                >
+                                  {editingWord
+                                    ? `Update ${editingWord.term}`
+                                    : "Add a word and its translation"}
+                                </h4>
+                              </div>
+
+                              <label style={{ ...fieldStyle, color: textSoft }}>
+                                <span>Word</span>
+                                <input
+                                  value={wordForm.term}
+                                  onChange={(event) =>
+                                    handleWordFormChange(
+                                      list.id,
+                                      "term",
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="hola"
+                                  style={lightInputStyle}
+                                />
+                              </label>
+
+                              <label style={{ ...fieldStyle, color: textSoft }}>
+                                <span>Translation</span>
+                                <input
+                                  value={wordForm.definition}
+                                  onChange={(event) =>
+                                    handleWordFormChange(
+                                      list.id,
+                                      "definition",
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="hello"
+                                  style={lightInputStyle}
+                                />
+                              </label>
+
+                              <div
+                                style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}
                               >
-                                {editingWord ? "Editing word" : "New word"}
-                              </p>
-                              <h4 style={{ margin: "8px 0 0", fontSize: "1.2rem" }}>
-                                {editingWord
-                                  ? `Update ${editingWord.term}`
-                                  : "Add a word and definition"}
-                              </h4>
-                            </div>
-
-                            <label style={{ ...fieldStyle, color: "#4d5a73" }}>
-                              <span>Word</span>
-                              <input
-                                value={wordForm.term}
-                                onChange={(event) =>
-                                  handleWordFormChange(
-                                    list.id,
-                                    "term",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="hola"
-                                style={lightInputStyle}
-                              />
-                            </label>
-
-                            <label style={{ ...fieldStyle, color: "#4d5a73" }}>
-                              <span>Definition</span>
-                              <textarea
-                                value={wordForm.definition}
-                                onChange={(event) =>
-                                  handleWordFormChange(
-                                    list.id,
-                                    "definition",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="hello"
-                                style={textareaStyle}
-                              />
-                            </label>
-
-                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                              <button
-                                type="button"
-                                onClick={() => handleSubmitWord(list.id)}
-                                style={primaryButtonStyle}
-                              >
-                                {editingWord ? "Save word" : "Add word"}
-                              </button>
-                              {editingWord ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSubmitWord(list.id)}
+                                  style={primaryButtonStyle}
+                                >
+                                  Save word
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => resetWordForm(list.id)}
                                   style={secondaryButtonStyle}
                                 >
-                                  Cancel
+                                  Done
                                 </button>
-                              ) : null}
-                            </div>
-                          </section>
+                              </div>
+                            </section>
+                          ) : null}
 
                           <section style={{ display: "grid", gap: "12px" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: "12px",
+                                alignItems: "center",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              
+                              
+                            </div>
+
                             {loadingWordsByDeck[list.id] ? (
-                              <p style={{ margin: 0, color: "#4d5a73" }}>
+                              <p style={{ margin: 0, color: textMuted }}>
                                 Loading words...
                               </p>
                             ) : words.length === 0 ? (
                               <div
                                 style={{
-                                  border: "1px dashed rgba(23,32,51,0.15)",
+                                  border: "1px dashed rgba(130, 151, 255, 0.22)",
                                   borderRadius: "18px",
                                   padding: "18px",
-                                  color: "#4d5a73",
+                                  color: textMuted,
+                                  background: "rgba(255,255,255,0.03)",
                                 }}
                               >
                                 No words in this deck yet. Add the first one above.
@@ -1153,11 +1325,12 @@ export default function ListsPage() {
                                 <article
                                   key={word.id}
                                   style={{
-                                    border: "1px solid rgba(23,32,51,0.08)",
+                                    border: "1px solid rgba(130, 151, 255, 0.14)",
                                     borderRadius: "18px",
                                     padding: "16px",
                                     display: "grid",
                                     gap: "10px",
+                                    background: "rgba(255,255,255,0.03)",
                                   }}
                                 >
                                   <div
@@ -1170,13 +1343,19 @@ export default function ListsPage() {
                                     }}
                                   >
                                     <div>
-                                      <h4 style={{ margin: 0, fontSize: "1.1rem" }}>
+                                      <h4
+                                        style={{
+                                          margin: 0,
+                                          fontSize: "1.1rem",
+                                          color: textStrong,
+                                        }}
+                                      >
                                         {word.term}
                                       </h4>
                                       <p
                                         style={{
                                           margin: "8px 0 0",
-                                          color: "#4d5a73",
+                                          color: textMuted,
                                           whiteSpace: "pre-wrap",
                                         }}
                                       >
@@ -1200,7 +1379,7 @@ export default function ListsPage() {
                                       </button>
                                       <button
                                         type="button"
-                                        onClick={() => handleDeleteWord(list.id, word.id)}
+                                        onClick={() => handleRequestDeleteWord(list.id, word)}
                                         style={dangerButtonStyle}
                                       >
                                         Delete word
@@ -1221,6 +1400,241 @@ export default function ListsPage() {
           </section>
         </section>
       </div>
+
+      {showDeckModal ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(6, 7, 13, 0.62)",
+            display: "grid",
+            placeItems: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              width: "min(680px, 100%)",
+              maxHeight: "min(88vh, 920px)",
+              overflowY: "auto",
+              background: panelBackground,
+              border: panelBorder,
+              borderRadius: "28px",
+              padding: "28px",
+              boxShadow: panelShadow,
+              display: "grid",
+              gap: "18px",
+            }}
+          >
+            <div>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#76f7d5",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.14em",
+                  fontSize: "0.78rem",
+                }}
+              >
+                {editingId ? "Edit deck" : "Create deck"}
+              </p>
+              <h2 style={{ margin: "8px 0 0", fontSize: "1.8rem", color: textStrong }}>
+                {editingId ? "Update your deck" : "Build a new deck"}
+              </h2>
+              <p
+                style={{
+                  margin: "10px 0 0",
+                  color: textMuted,
+                  fontSize: "0.98rem",
+                }}
+              >
+                {editingId
+                  ? `This deck will stay in ${activeLanguage}.`
+                  : `Create a deck for ${activeLanguage} and add word pairs right away.`}
+              </p>
+            </div>
+
+            <label style={{ ...fieldStyle, color: textSoft }}>
+              <span>Deck name</span>
+              <input
+                name="name"
+                value={deckForm.name}
+                onChange={handleDeckFormChange}
+                placeholder="Travel essentials"
+                autoFocus
+                style={inputStyle}
+              />
+            </label>
+
+            {!editingId ? (
+              <section
+                style={{
+                  display: "grid",
+                  gap: "14px",
+                  borderTop: "1px solid rgba(130, 151, 255, 0.14)",
+                  paddingTop: "18px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "8px",
+                  }}
+                >
+                  {/* <p
+                    style={{
+                      margin: 0,
+                      color: "#76f7d5",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.12em",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    Starter words
+                  </p> */}
+                  <h3 style={{ margin: 0, color: textStrong, fontSize: "1.15rem" }}>
+                    Add words and translations
+                  </h3>
+                  <p style={{ margin: 0, color: textMuted }}>
+                    Add each word pair to the list below, then create the deck when
+                    you&apos;re ready.
+                  </p>
+                </div>
+
+                <div style={{ display: "grid", gap: "12px" }}>
+                  <label style={{ ...fieldStyle, color: textSoft }}>
+                    <span>Word</span>
+                    <input
+                      value={deckDraftWord.term}
+                      onChange={(event) =>
+                        handleDeckDraftWordChange("term", event.target.value)
+                      }
+                      placeholder="hola"
+                      style={lightInputStyle}
+                    />
+                  </label>
+
+                  <label style={{ ...fieldStyle, color: textSoft }}>
+                    <span>Translation</span>
+                    <input
+                      value={deckDraftWord.definition}
+                      onChange={(event) =>
+                        handleDeckDraftWordChange("definition", event.target.value)
+                      }
+                      placeholder="hello"
+                      style={lightInputStyle}
+                    />
+                  </label>
+
+                  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={handleAddDeckDraftWord}
+                      style={secondaryButtonStyle}
+                    >
+                      Add word
+                    </button>
+                  </div>
+
+                  {deckDraftWords.length > 0 ? (
+                    <div style={{ display: "grid", gap: "12px" }}>
+                      {deckDraftWords.map((draft, index) => (
+                        <div
+                          key={draft.id}
+                          style={{
+                            display: "grid",
+                            gap: "10px",
+                            padding: "16px",
+                            borderRadius: "20px",
+                            border: "1px solid rgba(130, 151, 255, 0.14)",
+                            background: "rgba(255,255,255,0.03)",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              alignItems: "center",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <p style={{ margin: 0, color: textMuted }}>
+                              Word {index + 1}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDeckDraftWord(draft.id)}
+                              style={dangerButtonStyle}
+                            >
+                              Remove
+                            </button>
+                          </div>
+
+                          <p style={{ margin: 0, color: textStrong }}>
+                            {draft.term}
+                          </p>
+                          <p style={{ margin: 0, color: textMuted }}>
+                            {draft.definition}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        border: "1px dashed rgba(130, 151, 255, 0.22)",
+                        borderRadius: "18px",
+                        padding: "16px",
+                        color: textMuted,
+                        background: "rgba(255,255,255,0.03)",
+                      }}
+                    >
+                      Your added words will appear here as you build the deck.
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            {error ? (
+              <p
+                style={{
+                  margin: 0,
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  background: "rgba(246, 89, 89, 0.18)",
+                  color: "#ffd6d6",
+                }}
+              >
+                {error}
+              </p>
+            ) : null}
+
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={handleSubmitDeck}
+                disabled={saving}
+                style={primaryButtonStyle}
+              >
+                {saving
+                  ? "Saving..."
+                  : editingId
+                    ? "Save"
+                    : "Create deck"}
+              </button>
+              <button
+                type="button"
+                onClick={closeDeckModal}
+                style={secondaryButtonStyle}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {languageMenu ? (
         <div
@@ -1264,7 +1678,7 @@ export default function ListsPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(23,32,51,0.28)",
+            background: "rgba(6, 7, 13, 0.62)",
             display: "grid",
             placeItems: "center",
             padding: "20px",
@@ -1273,10 +1687,11 @@ export default function ListsPage() {
           <div
             style={{
               width: "min(420px, 100%)",
-              background: "#fffdf8",
+              background: panelBackground,
+              border: panelBorder,
               borderRadius: "28px",
               padding: "28px",
-              boxShadow: "0 24px 70px rgba(17, 24, 39, 0.2)",
+              boxShadow: panelShadow,
               display: "grid",
               gap: "16px",
             }}
@@ -1285,7 +1700,7 @@ export default function ListsPage() {
               <p
                 style={{
                   margin: 0,
-                  color: "#b26a00",
+                  color: "#76f7d5",
                   textTransform: "uppercase",
                   letterSpacing: "0.14em",
                   fontSize: "0.78rem",
@@ -1293,26 +1708,19 @@ export default function ListsPage() {
               >
                 Add language
               </p>
-              <h2 style={{ margin: "8px 0 0", fontSize: "1.8rem" }}>
+              <h2 style={{ margin: "8px 0 0", fontSize: "1.8rem", color: textStrong }}>
                 What language are you studying?
               </h2>
             </div>
 
-            <label style={{ ...fieldStyle, color: "#4d5a73" }}>
+            <label style={{ ...fieldStyle, color: textSoft }}>
               <span>Language name</span>
               <input
                 value={newLanguage}
                 onChange={(event) => setNewLanguage(event.target.value)}
                 placeholder="Spanish"
                 autoFocus
-                style={{
-                  width: "100%",
-                  borderRadius: "16px",
-                  border: "1px solid rgba(23,32,51,0.12)",
-                  padding: "14px 16px",
-                  background: "rgba(255,255,255,0.9)",
-                  color: "#172033",
-                }}
+                style={lightInputStyle}
               />
             </label>
 
@@ -1336,12 +1744,12 @@ export default function ListsPage() {
         </div>
       ) : null}
 
-      {languageModal ? (
+      {confirmDialog ? (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(23,32,51,0.28)",
+            background: "rgba(6, 7, 13, 0.62)",
             display: "grid",
             placeItems: "center",
             padding: "20px",
@@ -1350,109 +1758,122 @@ export default function ListsPage() {
           <div
             style={{
               width: "min(460px, 100%)",
-              background: "#fffdf8",
+              background: panelBackground,
+              border: panelBorder,
               borderRadius: "28px",
               padding: "28px",
-              boxShadow: "0 24px 70px rgba(17, 24, 39, 0.2)",
+              boxShadow: panelShadow,
               display: "grid",
               gap: "16px",
             }}
           >
-            {languageModal.type === "rename" ? (
-              <>
-                <div>
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "#b26a00",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.14em",
-                      fontSize: "0.78rem",
-                    }}
-                  >
-                    Edit language
-                  </p>
-                  <h2 style={{ margin: "8px 0 0", fontSize: "1.8rem" }}>
-                    Rename {languageModal.language}
-                  </h2>
-                </div>
+            <div>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#76f7d5",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.14em",
+                  fontSize: "0.78rem",
+                }}
+              >
+                {confirmDialog.kicker}
+              </p>
+              <h2 style={{ margin: "8px 0 0", fontSize: "1.8rem", color: textStrong }}>
+                {confirmDialog.title}
+              </h2>
+            </div>
 
-                <label style={{ ...fieldStyle, color: "#4d5a73" }}>
-                  <span>New language name</span>
-                  <input
-                    value={languageDraft}
-                    onChange={(event) => setLanguageDraft(event.target.value)}
-                    autoFocus
-                    style={{
-                      width: "100%",
-                      borderRadius: "16px",
-                      border: "1px solid rgba(23,32,51,0.12)",
-                      padding: "14px 16px",
-                      background: "rgba(255,255,255,0.9)",
-                      color: "#172033",
-                    }}
-                  />
-                </label>
+            <p style={{ margin: 0, color: textMuted }}>
+              {confirmDialog.message}
+            </p>
 
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={handleRenameLanguage}
-                    style={primaryButtonStyle}
-                  >
-                    Save language
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeLanguageModal}
-                    style={secondaryButtonStyle}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "#b26a00",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.14em",
-                      fontSize: "0.78rem",
-                    }}
-                  >
-                    Delete language
-                  </p>
-                  <h2 style={{ margin: "8px 0 0", fontSize: "1.8rem" }}>
-                    Delete {languageModal.language}?
-                  </h2>
-                </div>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={confirmDialog.onConfirm}
+                style={dangerButtonStyle}
+              >
+                {confirmDialog.confirmLabel}
+              </button>
+              <button
+                type="button"
+                onClick={closeConfirmDialog}
+                style={secondaryButtonStyle}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
-                <p style={{ margin: 0, color: "#4d5a73" }}>
-                  This will permanently delete the language and all decks inside
-                  it. This action cannot be undone.
-                </p>
+      {languageModal?.type === "rename" ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(6, 7, 13, 0.62)",
+            display: "grid",
+            placeItems: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              width: "min(460px, 100%)",
+              background: panelBackground,
+              border: panelBorder,
+              borderRadius: "28px",
+              padding: "28px",
+              boxShadow: panelShadow,
+              display: "grid",
+              gap: "16px",
+            }}
+          >
+            <div>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#76f7d5",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.14em",
+                  fontSize: "0.78rem",
+                }}
+              >
+                Edit language
+              </p>
+              <h2 style={{ margin: "8px 0 0", fontSize: "1.8rem", color: textStrong }}>
+                Rename {languageModal.language}
+              </h2>
+            </div>
 
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={handleDeleteLanguage}
-                    style={dangerButtonStyle}
-                  >
-                    Delete language and decks
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeLanguageModal}
-                    style={secondaryButtonStyle}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            )}
+            <label style={{ ...fieldStyle, color: textSoft }}>
+              <span>New language name</span>
+              <input
+                value={languageDraft}
+                onChange={(event) => setLanguageDraft(event.target.value)}
+                autoFocus
+                style={lightInputStyle}
+              />
+            </label>
+
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={handleRenameLanguage}
+                style={primaryButtonStyle}
+              >
+                Save language
+              </button>
+              <button
+                type="button"
+                onClick={closeLanguageModal}
+                style={secondaryButtonStyle}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
