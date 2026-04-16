@@ -23,3 +23,29 @@ class VocabularyList(Base):
         back_populates="vocabulary_list",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def word_count(self) -> int:
+        return len(self.words)
+
+    @property
+    def weak_word_count(self) -> int:
+        return sum(1 for word in self.words if word.strength == "weak")
+
+    @property
+    def okay_word_count(self) -> int:
+        return sum(1 for word in self.words if word.strength == "okay")
+
+    @property
+    def strong_word_count(self) -> int:
+        return sum(1 for word in self.words if word.strength == "strong")
+
+    @property
+    def last_practiced_at(self) -> datetime | None:
+        practiced_words = [
+            word.last_practiced_at for word in self.words if word.last_practiced_at is not None
+        ]
+        if not practiced_words:
+            return None
+
+        return max(practiced_words)

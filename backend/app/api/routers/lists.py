@@ -1,8 +1,9 @@
 from uuid import UUID
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
@@ -13,6 +14,7 @@ from app.schemas.list import (
     CreateListRequest,
     DeleteLanguageRequest,
     ListResponse,
+    RecordWordPerformanceRequest,
     RenameLanguageRequest,
     UpdateWordRequest,
     UpdateListRequest,
@@ -20,6 +22,21 @@ from app.schemas.list import (
 )
 
 router = APIRouter(prefix="/lists", tags=["lists"])
+
+
+def calculate_strength(practice_attempts: int, correct_attempts: int) -> str:
+    if practice_attempts == 0:
+        return "weak"
+
+    accuracy = correct_attempts / practice_attempts
+
+    if practice_attempts >= 5 and accuracy >= 0.85:
+        return "strong"
+
+    if practice_attempts >= 3 and accuracy >= 0.6:
+        return "okay"
+
+    return "weak"
 
 
 def get_owned_list_or_404(db: Session, user_id, list_id: UUID) -> VocabularyList:
@@ -76,7 +93,9 @@ def get_lists(
     user=Depends(get_current_user),
 ):
     lists = db.scalars(
-        select(VocabularyList).where(VocabularyList.user_id == user.id)
+        select(VocabularyList)
+        .options(selectinload(VocabularyList.words))
+        .where(VocabularyList.user_id == user.id)
     ).all()
 
     return lists
@@ -119,12 +138,55 @@ def create_word(
         list_id=list_id,
         term=payload.term.strip(),
         definition=payload.definition.strip(),
+        strength="weak",
     )
     db.add(word)
     db.commit()
     db.refresh(word)
 
     return word
+
+
+@router.post("/words/performance", response_model=list[WordResponse])
+def record_word_performance(
+    payload: RecordWordPerformanceRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    if not payload.results:
+        raise HTTPException(status_code=400, detail="At least one quiz result is required")
+
+    word_ids = [result.word_id for result in payload.results]
+    words = db.scalars(
+        select(VocabularyWord)
+        .join(VocabularyList, VocabularyList.id == VocabularyWord.list_id)
+        .where(
+            VocabularyWord.id.in_(word_ids),
+            VocabularyList.user_id == user.id,
+        )
+    ).all()
+
+    words_by_id = {word.id: word for word in words}
+
+    if len(words_by_id) != len(set(word_ids)):
+        raise HTTPException(status_code=404, detail="One or more words were not found")
+
+    now = datetime.now(timezone.utc)
+
+    for result in payload.results:
+        word = words_by_id[result.word_id]
+        word.practice_attempts += 1
+        if result.is_correct:
+            word.correct_attempts += 1
+        word.last_practiced_at = now
+        word.strength = calculate_strength(
+            word.practice_attempts,
+            word.correct_attempts,
+        )
+
+    db.commit()
+
+    return [words_by_id[result.word_id] for result in payload.results]
 
 
 @router.put("/{list_id}/words/{word_id}", response_model=WordResponse)

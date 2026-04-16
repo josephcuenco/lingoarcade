@@ -102,6 +102,40 @@ const contextMenuStyle = {
   gap: "6px",
 };
 
+const strengthStyles = {
+  weak: {
+    label: "Weak",
+    color: "#ffb5d5",
+    border: "1px solid rgba(255, 92, 156, 0.28)",
+    background: "rgba(255, 77, 157, 0.14)",
+    glow: "0 0 0 1px rgba(255, 92, 156, 0.08), 0 12px 24px rgba(255, 77, 157, 0.1)",
+  },
+  okay: {
+    label: "Okay",
+    color: "#ffe3a3",
+    border: "1px solid rgba(255, 197, 74, 0.26)",
+    background: "rgba(255, 197, 74, 0.12)",
+    glow: "0 0 0 1px rgba(255, 197, 74, 0.08), 0 12px 24px rgba(255, 197, 74, 0.09)",
+  },
+  strong: {
+    label: "Strong",
+    color: "#8ff8de",
+    border: "1px solid rgba(118, 247, 213, 0.3)",
+    background: "rgba(118, 247, 213, 0.12)",
+    glow: "0 0 0 1px rgba(118, 247, 213, 0.08), 0 12px 24px rgba(118, 247, 213, 0.09)",
+  },
+};
+
+const getStrengthStyle = (strength) => strengthStyles[strength] || strengthStyles.weak;
+
+const formatAccuracy = (accuracy, attempts) => {
+  if (!attempts) {
+    return "New word";
+  }
+
+  return `${Math.round((accuracy || 0) * 100)}% accuracy`;
+};
+
 export default function ListsPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -1099,6 +1133,25 @@ export default function ListsPage() {
                   const isWordFormVisible =
                     showAddWordFormByDeck[list.id] || Boolean(editingWord);
                   const words = wordsByDeck[list.id] || [];
+                  const hasLoadedWords = Object.prototype.hasOwnProperty.call(
+                    wordsByDeck,
+                    list.id,
+                  );
+                  const deckWordCount = hasLoadedWords ? words.length : list.word_count || 0;
+                  const strengthCounts = hasLoadedWords
+                    ? words.reduce(
+                        (counts, word) => {
+                          const key = word.strength || "weak";
+                          counts[key] = (counts[key] || 0) + 1;
+                          return counts;
+                        },
+                        { weak: 0, okay: 0, strong: 0 },
+                      )
+                    : {
+                        weak: list.weak_word_count || 0,
+                        okay: list.okay_word_count || 0,
+                        strong: list.strong_word_count || 0,
+                      };
 
                   return (
                     <article
@@ -1151,8 +1204,43 @@ export default function ListsPage() {
                               fontSize: "0.92rem",
                             }}
                           >
-                            {words.length} {words.length === 1 ? "word" : "words"}
+                            {deckWordCount} {deckWordCount === 1 ? "word" : "words"}
                           </p>
+                          {deckWordCount > 0 ? (
+                            <div
+                              style={{
+                                marginTop: "12px",
+                                display: "flex",
+                                gap: "8px",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              {["weak", "okay", "strong"].map((strength) => {
+                                const strengthStyle = getStrengthStyle(strength);
+                                return (
+                                  <span
+                                    key={strength}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                      padding: "7px 12px",
+                                      borderRadius: "999px",
+                                      fontSize: "0.8rem",
+                                      color: strengthStyle.color,
+                                      border: strengthStyle.border,
+                                      background: strengthStyle.background,
+                                    }}
+                                  >
+                                    {strengthStyle.label}
+                                    <strong style={{ color: textStrong }}>
+                                      {strengthCounts[strength]}
+                                    </strong>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : null}
                         </div>
 
                         <p style={{ margin: 0, color: "#76f7d5", fontSize: "0.92rem" }}>
@@ -1300,8 +1388,53 @@ export default function ListsPage() {
                                 flexWrap: "wrap",
                               }}
                             >
-                              
-                              
+                              <div style={{ display: "grid", gap: "6px" }}>
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    color: textStrong,
+                                    fontSize: "1rem",
+                                  }}
+                                >
+                                  Word progress
+                                </p>
+                                <p style={{ margin: 0, color: textMuted, fontSize: "0.92rem" }}>
+                                  Track which words need more quiz time.
+                                </p>
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: "8px",
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                {["weak", "okay", "strong"].map((strength) => {
+                                  const strengthStyle = getStrengthStyle(strength);
+                                  return (
+                                    <span
+                                      key={strength}
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        padding: "8px 12px",
+                                        borderRadius: "999px",
+                                        fontSize: "0.82rem",
+                                        color: strengthStyle.color,
+                                        border: strengthStyle.border,
+                                        background: strengthStyle.background,
+                                        boxShadow: strengthStyle.glow,
+                                      }}
+                                    >
+                                      {strengthStyle.label}
+                                      <strong style={{ color: textStrong }}>
+                                        {strengthCounts[strength]}
+                                      </strong>
+                                    </span>
+                                  );
+                                })}
+                              </div>
                             </div>
 
                             {loadingWordsByDeck[list.id] ? (
@@ -1321,73 +1454,144 @@ export default function ListsPage() {
                                 No words in this deck yet. Add the first one above.
                               </div>
                             ) : (
-                              words.map((word) => (
-                                <article
-                                  key={word.id}
-                                  style={{
-                                    border: "1px solid rgba(130, 151, 255, 0.14)",
-                                    borderRadius: "18px",
-                                    padding: "16px",
-                                    display: "grid",
-                                    gap: "10px",
-                                    background: "rgba(255,255,255,0.03)",
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      gap: "12px",
-                                      alignItems: "start",
-                                      flexWrap: "wrap",
-                                    }}
-                                  >
-                                    <div>
-                                      <h4
-                                        style={{
-                                          margin: 0,
-                                          fontSize: "1.1rem",
-                                          color: textStrong,
-                                        }}
-                                      >
-                                        {word.term}
-                                      </h4>
-                                      <p
-                                        style={{
-                                          margin: "8px 0 0",
-                                          color: textMuted,
-                                          whiteSpace: "pre-wrap",
-                                        }}
-                                      >
-                                        {word.definition}
-                                      </p>
-                                    </div>
+                              <div className="deck-word-scroll">
+                                {words.map((word) => (
+                                  (() => {
+                                    const strengthStyle = getStrengthStyle(word.strength);
 
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        gap: "8px",
-                                        flexWrap: "wrap",
-                                      }}
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => handleStartEditWord(list.id, word)}
-                                        style={secondaryButtonStyle}
+                                    return (
+                                      <article
+                                        key={word.id}
+                                        style={{
+                                          border: strengthStyle.border,
+                                          borderRadius: "18px",
+                                          padding: "16px",
+                                          display: "grid",
+                                          gap: "12px",
+                                          background:
+                                            "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.03))",
+                                          boxShadow: strengthStyle.glow,
+                                        }}
                                       >
-                                        Edit word
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRequestDeleteWord(list.id, word)}
-                                        style={dangerButtonStyle}
-                                      >
-                                        Delete word
-                                      </button>
-                                    </div>
-                                  </div>
-                                </article>
-                              ))
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            gap: "12px",
+                                            alignItems: "start",
+                                            flexWrap: "wrap",
+                                          }}
+                                        >
+                                          <div style={{ display: "grid", gap: "10px" }}>
+                                            <div
+                                              style={{
+                                                display: "flex",
+                                                gap: "8px",
+                                                flexWrap: "wrap",
+                                                alignItems: "center",
+                                              }}
+                                            >
+                                              <h4
+                                                style={{
+                                                  margin: 0,
+                                                  fontSize: "1.1rem",
+                                                  color: textStrong,
+                                                }}
+                                              >
+                                                {word.term}
+                                              </h4>
+                                              <span
+                                                style={{
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                  padding: "6px 10px",
+                                                  borderRadius: "999px",
+                                                  fontSize: "0.78rem",
+                                                  color: strengthStyle.color,
+                                                  border: strengthStyle.border,
+                                                  background: strengthStyle.background,
+                                                }}
+                                              >
+                                                {strengthStyle.label}
+                                              </span>
+                                            </div>
+                                            <p
+                                              style={{
+                                                margin: 0,
+                                                color: textMuted,
+                                                whiteSpace: "pre-wrap",
+                                              }}
+                                            >
+                                              {word.definition}
+                                            </p>
+                                          </div>
+
+                                          <div
+                                            style={{
+                                              display: "flex",
+                                              gap: "8px",
+                                              flexWrap: "wrap",
+                                            }}
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={() => handleStartEditWord(list.id, word)}
+                                              style={secondaryButtonStyle}
+                                            >
+                                              Edit word
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRequestDeleteWord(list.id, word)}
+                                              style={dangerButtonStyle}
+                                            >
+                                              Delete word
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            gap: "10px",
+                                            flexWrap: "wrap",
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              padding: "6px 10px",
+                                              borderRadius: "999px",
+                                              fontSize: "0.78rem",
+                                              color: textMuted,
+                                              border: "1px solid rgba(130, 151, 255, 0.16)",
+                                              background: "rgba(255,255,255,0.03)",
+                                            }}
+                                          >
+                                            {formatAccuracy(word.accuracy, word.practice_attempts)}
+                                          </span>
+                                          <span
+                                            style={{
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              padding: "6px 10px",
+                                              borderRadius: "999px",
+                                              fontSize: "0.78rem",
+                                              color: textMuted,
+                                              border: "1px solid rgba(130, 151, 255, 0.16)",
+                                              background: "rgba(255,255,255,0.03)",
+                                            }}
+                                          >
+                                            {word.correct_attempts || 0}/{word.practice_attempts || 0}{" "}
+                                            correct
+                                          </span>
+                                        </div>
+                                      </article>
+                                    );
+                                  })()
+                                ))}
+                              </div>
                             )}
                           </section>
                         </div>

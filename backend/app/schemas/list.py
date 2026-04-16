@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -12,6 +13,11 @@ class ListResponse(BaseModel):
     id: UUID
     name: str
     language: str
+    word_count: int
+    weak_word_count: int
+    okay_word_count: int
+    strong_word_count: int
+    last_practiced_at: datetime | None
 
     class Config:
         from_attributes = True
@@ -25,6 +31,11 @@ class WordResponse(BaseModel):
     id: UUID
     term: str
     definition: str
+    practice_attempts: int
+    correct_attempts: int
+    accuracy: float
+    strength: str
+    last_practiced_at: datetime | None
 
     class Config:
         from_attributes = True
@@ -47,3 +58,12 @@ class RenameLanguageRequest(BaseModel):
 
 class DeleteLanguageRequest(BaseModel):
     language: str
+
+
+class QuizResultItem(BaseModel):
+    word_id: UUID
+    is_correct: bool
+
+
+class RecordWordPerformanceRequest(BaseModel):
+    results: list[QuizResultItem]

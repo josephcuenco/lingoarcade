@@ -19,11 +19,61 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  scrollbar-color: rgba(118, 247, 213, 0.55) rgba(12, 15, 28, 0.9);
+  scrollbar-width: thin;
+}
+
+html,
+body,
+#root,
+* {
+  scrollbar-color: rgba(118, 247, 213, 0.55) rgba(12, 15, 28, 0.9);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+*::-webkit-scrollbar-track {
+  background:
+    linear-gradient(180deg, rgba(8, 10, 19, 0.96), rgba(16, 21, 40, 0.92));
+}
+
+*::-webkit-scrollbar-thumb {
+  background:
+    linear-gradient(180deg, rgba(72, 183, 255, 0.78), rgba(255, 77, 157, 0.78));
+  border-radius: 999px;
+  border: 2px solid rgba(12, 15, 28, 0.92);
+  box-shadow:
+    0 0 16px rgba(118, 247, 213, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(180deg, rgba(118, 247, 213, 0.9), rgba(255, 77, 157, 0.88));
 }
 
 button,
 input {
   font: inherit;
+}
+
+select,
+option {
+  font: inherit;
+}
+
+select {
+  color-scheme: dark;
+}
+
+.game-select,
+.game-select option {
+  background: #111524;
+  color: #f7f8ff;
 }
 
 a {
