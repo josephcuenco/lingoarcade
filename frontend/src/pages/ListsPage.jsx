@@ -102,6 +102,9 @@ const contextMenuStyle = {
   gap: "6px",
 };
 
+const deckDraftWordErrorMessage =
+  "Add both the word and the translation before creating the entry.";
+
 const strengthStyles = {
   weak: {
     label: "Weak",
@@ -289,6 +292,9 @@ export default function ListsPage() {
       ...currentDraft,
       [field]: value,
     }));
+    setError((currentError) =>
+      currentError === deckDraftWordErrorMessage ? "" : currentError,
+    );
   };
 
   const handleAddDeckDraftWord = () => {
@@ -299,7 +305,7 @@ export default function ListsPage() {
     };
 
     if (!nextWord.term || !nextWord.definition) {
-      setError("Each starter word needs both a word and a translation.");
+      setError(deckDraftWordErrorMessage);
       return;
     }
 
@@ -1243,9 +1249,53 @@ export default function ListsPage() {
                           ) : null}
                         </div>
 
-                        <p style={{ margin: 0, color: "#76f7d5", fontSize: "0.92rem" }}>
-                          {isExpanded ? "Hide deck" : "Open deck"}
-                        </p>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "10px",
+                            flexWrap: "wrap",
+                            alignItems: "center",
+                            justifyContent: "flex-end",
+                          }}
+                        >
+                          {isExpanded ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleEditDeck(list);
+                                }}
+                                style={secondaryButtonStyle}
+                              >
+                                Edit Name
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleRequestDeleteDeck(list);
+                                }}
+                                style={dangerButtonStyle}
+                              >
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleOpenAddWordForm(list.id);
+                                }}
+                                style={primaryButtonStyle}
+                              >
+                                Add word
+                              </button>
+                            </>
+                          ) : null}
+                          <p style={{ margin: 0, color: "#76f7d5", fontSize: "0.92rem" }}>
+                            {isExpanded ? "" : "Open deck"}
+                          </p>
+                        </div>
                       </div>
 
                       {isExpanded ? (
@@ -1257,37 +1307,6 @@ export default function ListsPage() {
                             gap: "18px",
                           }}
                         >
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: "10px",
-                              flexWrap: "wrap",
-                              alignItems: "center",
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleEditDeck(list)}
-                              style={secondaryButtonStyle}
-                            >
-                              Edit Name
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRequestDeleteDeck(list)}
-                              style={dangerButtonStyle}
-                            >
-                              Delete
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenAddWordForm(list.id)}
-                              style={primaryButtonStyle}
-                            >
-                              Add word
-                            </button>
-                          </div>
-
                           {isWordFormVisible ? (
                             <section
                               style={{
@@ -1300,30 +1319,30 @@ export default function ListsPage() {
                                 gap: "12px",
                               }}
                             >
-                              <div>
-                                <p
-                                  style={{
-                                    margin: 0,
-                                    color: "#76f7d5",
-                                    textTransform: "uppercase",
-                                    letterSpacing: "0.12em",
-                                    fontSize: "0.75rem",
-                                  }}
-                                >
-                                  {editingWord ? "Editing word" : "New word"}
-                                </p>
-                                <h4
-                                  style={{
-                                    margin: "8px 0 0",
-                                    fontSize: "1.2rem",
-                                    color: textStrong,
-                                  }}
-                                >
-                                  {editingWord
-                                    ? `Update ${editingWord.term}`
-                                    : "Add a word and its translation"}
-                                </h4>
-                              </div>
+                              {editingWord ? (
+                                <div>
+                                  <p
+                                    style={{
+                                      margin: 0,
+                                      color: "#76f7d5",
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.12em",
+                                      fontSize: "0.75rem",
+                                    }}
+                                  >
+                                    Editing word
+                                  </p>
+                                  <h4
+                                    style={{
+                                      margin: "8px 0 0",
+                                      fontSize: "1.2rem",
+                                      color: textStrong,
+                                    }}
+                                  >
+                                    {`Update ${editingWord.term}`}
+                                  </h4>
+                                </div>
+                              ) : null}
 
                               <label style={{ ...fieldStyle, color: textSoft }}>
                                 <span>Word</span>
@@ -1405,36 +1424,11 @@ export default function ListsPage() {
                               <div
                                 style={{
                                   display: "flex",
-                                  gap: "8px",
+                                  gap: "10px",
                                   flexWrap: "wrap",
+                                  alignItems: "center",
                                 }}
-                              >
-                                {["weak", "okay", "strong"].map((strength) => {
-                                  const strengthStyle = getStrengthStyle(strength);
-                                  return (
-                                    <span
-                                      key={strength}
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                        padding: "8px 12px",
-                                        borderRadius: "999px",
-                                        fontSize: "0.82rem",
-                                        color: strengthStyle.color,
-                                        border: strengthStyle.border,
-                                        background: strengthStyle.background,
-                                        boxShadow: strengthStyle.glow,
-                                      }}
-                                    >
-                                      {strengthStyle.label}
-                                      <strong style={{ color: textStrong }}>
-                                        {strengthCounts[strength]}
-                                      </strong>
-                                    </span>
-                                  );
-                                })}
-                              </div>
+                              />
                             </div>
 
                             {loadingWordsByDeck[list.id] ? (
@@ -1740,14 +1734,33 @@ export default function ListsPage() {
                     </button>
                   </div>
 
+                  {error === deckDraftWordErrorMessage ? (
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#ffb6d7",
+                        fontSize: "0.92rem",
+                      }}
+                    >
+                      {deckDraftWordErrorMessage}
+                    </p>
+                  ) : null}
+
                   {deckDraftWords.length > 0 ? (
                     <div style={{ display: "grid", gap: "12px" }}>
-                      {deckDraftWords.map((draft, index) => (
+                      <p style={{ margin: 0, color: textMuted, fontSize: "0.92rem" }}>
+                        {deckDraftWords.length}{" "}
+                        {deckDraftWords.length === 1 ? "word" : "words"} added
+                      </p>
+                      {deckDraftWords.map((draft) => (
                         <div
                           key={draft.id}
                           style={{
-                            display: "grid",
-                            gap: "10px",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: "16px",
+                            alignItems: "start",
+                            flexWrap: "wrap",
                             padding: "16px",
                             borderRadius: "20px",
                             border: "1px solid rgba(130, 151, 255, 0.14)",
@@ -1756,31 +1769,26 @@ export default function ListsPage() {
                         >
                           <div
                             style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: "12px",
-                              alignItems: "center",
-                              flexWrap: "wrap",
+                              display: "grid",
+                              gap: "10px",
+                              minWidth: "0",
+                              flex: "1 1 220px",
                             }}
                           >
-                            <p style={{ margin: 0, color: textMuted }}>
-                              Word {index + 1}
+                            <p style={{ margin: 0, color: textStrong }}>
+                              {draft.term}
                             </p>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveDeckDraftWord(draft.id)}
-                              style={dangerButtonStyle}
-                            >
-                              Remove
-                            </button>
+                            <p style={{ margin: 0, color: textMuted }}>
+                              {draft.definition}
+                            </p>
                           </div>
-
-                          <p style={{ margin: 0, color: textStrong }}>
-                            {draft.term}
-                          </p>
-                          <p style={{ margin: 0, color: textMuted }}>
-                            {draft.definition}
-                          </p>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDeckDraftWord(draft.id)}
+                            style={dangerButtonStyle}
+                          >
+                            Remove
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1801,7 +1809,7 @@ export default function ListsPage() {
               </section>
             ) : null}
 
-            {error ? (
+            {error && error !== deckDraftWordErrorMessage ? (
               <p
                 style={{
                   margin: 0,

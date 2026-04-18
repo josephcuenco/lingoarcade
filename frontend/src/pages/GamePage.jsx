@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../auth/useAuth";
@@ -66,11 +66,17 @@ const gameOptions = [
 ];
 
 const strengthOptions = [
-  { value: "all", label: "All words" },
   { value: "weak", label: "Weak words" },
   { value: "okay", label: "Okay words" },
   { value: "strong", label: "Strong words" },
 ];
+
+const questionTypeOptions = [
+  { value: "multiple-choice", label: "Multiple choice" },
+  { value: "translation", label: "Translation" },
+];
+
+const chooseDeckErrorMessage = "Choose at least one deck for the quiz.";
 
 const strengthStyles = {
   weak: {
@@ -132,41 +138,85 @@ function shuffle(items) {
   return nextItems;
 }
 
-function buildQuizQuestions(words, limit) {
+function normalizeAnswer(value) {
+  return value.trim().toLowerCase();
+}
+
+function formatElapsedTime(totalSeconds) {
+  const safeSeconds = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function buildQuizQuestions(words, limit, selectedQuestionTypes) {
   const eligibleWords = words.filter((word) => word.definition);
   const shuffledWords = shuffle(eligibleWords).slice(0, limit);
+  const questionTypes =
+    selectedQuestionTypes.length > 0 ? selectedQuestionTypes : ["multiple-choice"];
+  const questionTypeSequence = shuffle(
+    Array.from({ length: shuffledWords.length }, (_, index) =>
+      questionTypes[index % questionTypes.length],
+    ),
+  );
 
-  return shuffledWords.map((word) => {
-    const distractors = shuffle(
-      eligibleWords
-        .filter((candidate) => candidate.id !== word.id)
-        .map((candidate) => candidate.definition),
-    )
-      .filter((definition, index, definitions) =>
-        definitions.indexOf(definition) === index,
+  return shuffledWords
+    .map((word, index) => {
+      const questionType = questionTypeSequence[index];
+
+      if (questionType === "translation") {
+        return {
+          id: word.id,
+          type: "translation",
+          prompt: word.term,
+          correctAnswer: word.definition,
+          deckName: word.deckName,
+          language: word.language,
+        };
+      }
+
+      const distractors = shuffle(
+        eligibleWords
+          .filter((candidate) => candidate.id !== word.id)
+          .map((candidate) => candidate.definition),
       )
-      .slice(0, 3);
+        .filter((definition, optionIndex, definitions) =>
+          definitions.indexOf(definition) === optionIndex,
+        )
+        .slice(0, 3);
 
-    const options = shuffle([word.definition, ...distractors]).slice(0, 4);
+      const options = shuffle([word.definition, ...distractors]).slice(0, 4);
 
-    return {
-      id: word.id,
-      prompt: word.term,
-      correctAnswer: word.definition,
-      options,
-      deckName: word.deckName,
-      language: word.language,
-    };
-  });
+      return {
+        id: word.id,
+        type: "multiple-choice",
+        prompt: word.term,
+        correctAnswer: word.definition,
+        options,
+        deckName: word.deckName,
+        language: word.language,
+      };
+    })
+    .filter((question) => question.type === "translation" || question.options.length === 4);
 }
 
 export default function GamePage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [lists, setLists] = useState([]);
+  const [selectedLanguage, setSelectedLanguage] = useState("");
   const [selectedDeckIds, setSelectedDeckIds] = useState([]);
   const [questionCount, setQuestionCount] = useState(5);
-  const [strengthFilter, setStrengthFilter] = useState("all");
+  const [selectedStrengths, setSelectedStrengths] = useState([
+    "weak",
+    "okay",
+    "strong",
+  ]);
+  const [selectedQuestionTypes, setSelectedQuestionTypes] = useState([
+    "multiple-choice",
+    "translation",
+  ]);
   const [loading, setLoading] = useState(true);
   const [quizLoading, setQuizLoading] = useState(false);
   const [error, setError] = useState("");
@@ -174,9 +224,14 @@ export default function GamePage() {
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [translationAnswer, setTranslationAnswer] = useState("");
   const [submittedAnswer, setSubmittedAnswer] = useState(null);
   const [score, setScore] = useState(0);
   const [quizResults, setQuizResults] = useState([]);
+  const [quizStartedAt, setQuizStartedAt] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [completedElapsedSeconds, setCompletedElapsedSeconds] = useState(0);
+  const translationInputRef = useRef(null);
 
   const handleUnauthorized = () => {
     logout();
@@ -223,9 +278,74 @@ export default function GamePage() {
     }, {});
   }, [lists]);
 
+  const availableLanguages = useMemo(
+    () => Object.keys(decksByLanguage).sort((left, right) => left.localeCompare(right)),
+    [decksByLanguage],
+  );
+
+  const visibleDecks = useMemo(
+    () => (selectedLanguage ? decksByLanguage[selectedLanguage] || [] : []),
+    [decksByLanguage, selectedLanguage],
+  );
+
+  useEffect(() => {
+    if (!availableLanguages.length) {
+      setSelectedLanguage("");
+      return;
+    }
+
+    setSelectedLanguage((currentLanguage) =>
+      availableLanguages.includes(currentLanguage) ? currentLanguage : availableLanguages[0],
+    );
+  }, [availableLanguages]);
+
+  useEffect(() => {
+    if (!selectedLanguage) {
+      setSelectedDeckIds([]);
+      return;
+    }
+
+    const visibleDeckIds = new Set(visibleDecks.map((deck) => deck.id));
+    setSelectedDeckIds((currentDeckIds) =>
+      currentDeckIds.filter((deckId) => visibleDeckIds.has(deckId)),
+    );
+  }, [selectedLanguage, visibleDecks]);
+
   const currentQuestion = quizQuestions[currentQuestionIndex];
   const isQuizActive = activeMode === "quiz-play";
   const isQuizComplete = activeMode === "quiz-results";
+
+  useEffect(() => {
+    if (!isQuizActive || !quizStartedAt) {
+      return undefined;
+    }
+
+    const updateElapsedTime = () => {
+      setElapsedSeconds(
+        Math.floor((Date.now() - quizStartedAt.getTime()) / 1000),
+      );
+    };
+
+    updateElapsedTime();
+    const intervalId = window.setInterval(updateElapsedTime, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isQuizActive, quizStartedAt]);
+
+  useEffect(() => {
+    if (
+      !isQuizActive ||
+      currentQuestion?.type !== "translation" ||
+      submittedAnswer
+    ) {
+      return;
+    }
+
+    translationInputRef.current?.focus();
+    translationInputRef.current?.select();
+  }, [currentQuestionIndex, currentQuestion, isQuizActive, submittedAnswer]);
 
   useEffect(() => {
     if (!submittedAnswer) {
@@ -236,6 +356,11 @@ export default function GamePage() {
       const isLastQuestion = currentQuestionIndex === quizQuestions.length - 1;
 
       if (isLastQuestion) {
+        const finalElapsedSeconds = quizStartedAt
+          ? Math.floor((Date.now() - quizStartedAt.getTime()) / 1000)
+          : 0;
+        setCompletedElapsedSeconds(finalElapsedSeconds);
+
         void (async () => {
           if (quizResults.length === 0) {
             return;
@@ -265,13 +390,22 @@ export default function GamePage() {
 
       setCurrentQuestionIndex((currentIndex) => currentIndex + 1);
       setSelectedAnswer(null);
+      setTranslationAnswer("");
       setSubmittedAnswer(null);
     }, 1100);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [submittedAnswer, currentQuestionIndex, quizQuestions.length, quizResults, logout, navigate]);
+  }, [
+    submittedAnswer,
+    currentQuestionIndex,
+    quizQuestions.length,
+    quizResults,
+    logout,
+    navigate,
+    quizStartedAt,
+  ]);
 
   const handleLogout = () => {
     logout();
@@ -286,8 +420,35 @@ export default function GamePage() {
     );
   };
 
+  const handleSelectLanguage = (language) => {
+    setSelectedLanguage(language);
+    setError("");
+  };
+
+  const handleToggleQuestionType = (questionType) => {
+    setSelectedQuestionTypes((currentTypes) => {
+      if (currentTypes.includes(questionType)) {
+        return currentTypes.filter((type) => type !== questionType);
+      }
+
+      return [...currentTypes, questionType];
+    });
+    setError("");
+  };
+
+  const handleToggleStrength = (strength) => {
+    setSelectedStrengths((currentStrengths) => {
+      if (currentStrengths.includes(strength)) {
+        return currentStrengths.filter((value) => value !== strength);
+      }
+
+      return [...currentStrengths, strength];
+    });
+    setError("");
+  };
+
   const handleSelectAllDecks = () => {
-    setSelectedDeckIds(lists.map((list) => list.id));
+    setSelectedDeckIds(visibleDecks.map((deck) => deck.id));
   };
 
   const handleClearDeckSelection = () => {
@@ -298,14 +459,28 @@ export default function GamePage() {
     setQuizQuestions([]);
     setCurrentQuestionIndex(0);
     setSelectedAnswer(null);
+    setTranslationAnswer("");
     setSubmittedAnswer(null);
     setScore(0);
     setQuizResults([]);
+    setQuizStartedAt(null);
+    setElapsedSeconds(0);
+    setCompletedElapsedSeconds(0);
   };
 
   const handleStartQuiz = async () => {
     if (selectedDeckIds.length === 0) {
-      setError("Choose at least one deck for the quiz.");
+      setError(chooseDeckErrorMessage);
+      return;
+    }
+
+    if (selectedQuestionTypes.length === 0) {
+      setError("Choose at least one question format for the quiz.");
+      return;
+    }
+
+    if (selectedStrengths.length === 0) {
+      setError("Choose at least one word strength for the quiz.");
       return;
     }
 
@@ -325,16 +500,29 @@ export default function GamePage() {
         })),
       );
 
-      const filteredWords =
-        strengthFilter === "all"
-          ? allWords
-          : allWords.filter((word) => word.strength === strengthFilter);
+      const filteredWords = allWords.filter((word) =>
+        selectedStrengths.includes(word.strength || "weak"),
+      );
 
-      if (filteredWords.length < 4) {
-        const strengthLabel =
-          strengthFilter === "all" ? "" : `${strengthFilter} `;
+      const strengthLabel = selectedStrengths
+        .map(
+          (strength) =>
+            strengthOptions.find((option) => option.value === strength)?.label.toLowerCase() ||
+            strength,
+        )
+        .join(" + ");
+
+      if (filteredWords.length === 0) {
+        setError(`There are no ${strengthLabel} in the selected decks yet.`);
+        return;
+      }
+
+      if (
+        selectedQuestionTypes.includes("multiple-choice") &&
+        filteredWords.length < 4
+      ) {
         setError(
-          `You need at least 4 ${strengthLabel}words across the selected decks to build a quiz.`,
+          `You need at least 4 ${strengthLabel} across the selected decks to include multiple-choice questions.`,
         );
         return;
       }
@@ -342,7 +530,8 @@ export default function GamePage() {
       const nextQuestions = buildQuizQuestions(
         filteredWords,
         Math.min(questionCount, filteredWords.length),
-      ).filter((question) => question.options.length === 4);
+        selectedQuestionTypes,
+      );
 
       if (nextQuestions.length === 0) {
         setError(
@@ -352,6 +541,9 @@ export default function GamePage() {
       }
 
       resetQuizState();
+      setQuizStartedAt(new Date());
+      setElapsedSeconds(0);
+      setCompletedElapsedSeconds(0);
       setQuizQuestions(nextQuestions);
       setActiveMode("quiz-play");
     } catch (err) {
@@ -367,13 +559,42 @@ export default function GamePage() {
   };
 
   const handleSelectAnswer = (answer) => {
-    if (!currentQuestion || submittedAnswer) {
+    if (!currentQuestion || submittedAnswer || currentQuestion.type !== "multiple-choice") {
       return;
     }
 
     setSelectedAnswer(answer);
     const isCorrect = answer === currentQuestion.correctAnswer;
-    setSubmittedAnswer(answer);
+    setSubmittedAnswer({ value: answer, isCorrect });
+    setQuizResults((currentResults) => [
+      ...currentResults,
+      {
+        word_id: currentQuestion.id,
+        is_correct: isCorrect,
+      },
+    ]);
+
+    if (isCorrect) {
+      setScore((currentScore) => currentScore + 1);
+    }
+  };
+
+  const handleSubmitTranslation = () => {
+    if (!currentQuestion || submittedAnswer || currentQuestion.type !== "translation") {
+      return;
+    }
+
+    const typedAnswer = translationAnswer.trim();
+    if (!typedAnswer) {
+      setError("Type a translation before submitting your answer.");
+      return;
+    }
+
+    setError("");
+    const isCorrect =
+      normalizeAnswer(typedAnswer) === normalizeAnswer(currentQuestion.correctAnswer);
+    setSelectedAnswer(typedAnswer);
+    setSubmittedAnswer({ value: typedAnswer, isCorrect });
     setQuizResults((currentResults) => [
       ...currentResults,
       {
@@ -391,6 +612,10 @@ export default function GamePage() {
     resetQuizState();
     setActiveMode("quiz-setup");
     setError("");
+  };
+
+  const handlePlayAgain = async () => {
+    await handleStartQuiz();
   };
 
   const handleOpenQuizSetup = () => {
@@ -508,7 +733,7 @@ export default function GamePage() {
           </div>
         </section>
 
-        {error ? (
+        {error && error !== chooseDeckErrorMessage ? (
           <section
             style={{
               background: "rgba(255, 77, 157, 0.12)",
@@ -653,8 +878,52 @@ export default function GamePage() {
               </div>
             ) : (
               <div style={{ display: "grid", gap: "18px" }}>
-                {Object.entries(decksByLanguage).map(([language, languageDecks]) => (
-                  <section key={language} style={{ display: "grid", gap: "12px" }}>
+                <section style={{ display: "grid", gap: "12px" }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#76f7d5",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.12em",
+                      fontSize: "0.74rem",
+                    }}
+                  >
+                    Practice language
+                  </p>
+                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                    {availableLanguages.map((language) => {
+                      const isActive = selectedLanguage === language;
+
+                      return (
+                        <button
+                          key={language}
+                          type="button"
+                          onClick={() => handleSelectLanguage(language)}
+                          style={{
+                            borderRadius: "999px",
+                            padding: "11px 16px",
+                            border: isActive
+                              ? "1px solid rgba(118, 247, 213, 0.42)"
+                              : "1px solid rgba(130, 151, 255, 0.18)",
+                            background: isActive
+                              ? "linear-gradient(180deg, rgba(72, 183, 255, 0.16), rgba(255, 77, 157, 0.1))"
+                              : "rgba(255,255,255,0.04)",
+                            color: textStrong,
+                            cursor: "pointer",
+                            boxShadow: isActive
+                              ? "0 0 22px rgba(118, 247, 213, 0.08)"
+                              : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
+                          }}
+                        >
+                          {language}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {selectedLanguage ? (
+                  <section style={{ display: "grid", gap: "12px" }}>
                     <p
                       style={{
                         margin: 0,
@@ -664,95 +933,109 @@ export default function GamePage() {
                         fontSize: "0.74rem",
                       }}
                     >
-                      {language}
+                      {selectedLanguage}
                     </p>
 
-                    <div
-                      className="quiz-deck-grid"
-                      style={{
-                        alignItems: "stretch",
-                      }}
-                    >
-                      {languageDecks.map((deck) => {
-                        const isSelected = selectedDeckIds.includes(deck.id);
+                    {visibleDecks.length === 0 ? (
+                      <div
+                        style={{
+                          border: "1px dashed rgba(130, 151, 255, 0.22)",
+                          borderRadius: "22px",
+                          padding: "24px",
+                          color: textMuted,
+                          background: "rgba(255,255,255,0.03)",
+                        }}
+                      >
+                        No decks yet for {selectedLanguage}.
+                      </div>
+                    ) : (
+                      <div
+                        className="quiz-deck-grid"
+                        style={{
+                          alignItems: "stretch",
+                        }}
+                      >
+                        {visibleDecks.map((deck) => {
+                          const isSelected = selectedDeckIds.includes(deck.id);
 
-                        return (
-                          <button
-                            key={deck.id}
-                            type="button"
-                            onClick={() => handleToggleDeck(deck.id)}
-                            style={{
-                              textAlign: "left",
-                              borderRadius: "22px",
-                              border: isSelected
-                                ? "1px solid rgba(118, 247, 213, 0.45)"
-                                : panelBorder,
-                              background: isSelected
-                                ? "linear-gradient(180deg, rgba(72, 183, 255, 0.14), rgba(255, 77, 157, 0.1))"
-                                : "rgba(255,255,255,0.04)",
-                              padding: "18px",
-                              color: textStrong,
-                              cursor: "pointer",
-                              boxShadow: isSelected
-                                ? "0 0 24px rgba(118, 247, 213, 0.08)"
-                                : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
-                              display: "grid",
-                              gap: "12px",
-                            }}
-                          >
-                            <div style={{ display: "grid", gap: "6px" }}>
-                              <h3 style={{ margin: 0, fontSize: "1.08rem" }}>{deck.name}</h3>
-                              <p style={{ margin: 0, color: textMuted, fontSize: "0.92rem" }}>
-                                {deck.word_count} {deck.word_count === 1 ? "word" : "words"}
-                              </p>
-                            </div>
-
-                            <div
+                          return (
+                            <button
+                              key={deck.id}
+                              type="button"
+                              onClick={() => handleToggleDeck(deck.id)}
                               style={{
-                                display: "flex",
-                                gap: "8px",
-                                flexWrap: "wrap",
+                                textAlign: "left",
+                                borderRadius: "22px",
+                                border: isSelected
+                                  ? "1px solid rgba(118, 247, 213, 0.45)"
+                                  : panelBorder,
+                                background: isSelected
+                                  ? "linear-gradient(180deg, rgba(72, 183, 255, 0.14), rgba(255, 77, 157, 0.1))"
+                                  : "rgba(255,255,255,0.04)",
+                                padding: "18px",
+                                color: textStrong,
+                                cursor: "pointer",
+                                boxShadow: isSelected
+                                  ? "0 0 24px rgba(118, 247, 213, 0.08)"
+                                  : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
+                                display: "grid",
+                                gap: "12px",
                               }}
                             >
-                              {["weak", "okay", "strong"].map((strength) => {
-                                const strengthStyle = strengthStyles[strength];
-                                const count = deck[`${strength}_word_count`] || 0;
+                              <div style={{ display: "grid", gap: "6px" }}>
+                                <h3 style={{ margin: 0, fontSize: "1.08rem" }}>{deck.name}</h3>
+                                <p style={{ margin: 0, color: textMuted, fontSize: "0.92rem" }}>
+                                  {deck.word_count} {deck.word_count === 1 ? "word" : "words"}
+                                </p>
+                              </div>
 
-                                return (
-                                  <span
-                                    key={strength}
-                                    style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "8px",
-                                      padding: "6px 10px",
-                                      borderRadius: "999px",
-                                      fontSize: "0.78rem",
-                                      color: strengthStyle.color,
-                                      border: strengthStyle.border,
-                                      background: strengthStyle.background,
-                                    }}
-                                  >
-                                    {strengthStyle.label}
-                                    <strong style={{ color: textStrong }}>{count}</strong>
-                                  </span>
-                                );
-                              })}
-                            </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: "8px",
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                {["weak", "okay", "strong"].map((strength) => {
+                                  const strengthStyle = strengthStyles[strength];
+                                  const count = deck[`${strength}_word_count`] || 0;
 
-                            <p style={{ margin: 0, color: textMuted, fontSize: "0.88rem" }}>
-                              {formatLastPlayed(deck.last_practiced_at)}
-                            </p>
+                                  return (
+                                    <span
+                                      key={strength}
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        padding: "6px 10px",
+                                        borderRadius: "999px",
+                                        fontSize: "0.78rem",
+                                        color: strengthStyle.color,
+                                        border: strengthStyle.border,
+                                        background: strengthStyle.background,
+                                      }}
+                                    >
+                                      {strengthStyle.label}
+                                      <strong style={{ color: textStrong }}>{count}</strong>
+                                    </span>
+                                  );
+                                })}
+                              </div>
 
-                            <p style={{ margin: 0, color: textMuted }}>
-                              {isSelected ? "Selected for this quiz" : "Tap to include this deck"}
-                            </p>
-                          </button>
-                        );
-                      })}
-                    </div>
+                              <p style={{ margin: 0, color: textMuted, fontSize: "0.88rem" }}>
+                                {formatLastPlayed(deck.last_practiced_at)}
+                              </p>
+
+                              <p style={{ margin: 0, color: textMuted }}>
+                                {isSelected ? "Selected for this quiz" : "Tap to include this deck"}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </section>
-                ))}
+                ) : null}
               </div>
             )}
 
@@ -787,30 +1070,97 @@ export default function GamePage() {
                 </select>
               </label>
 
-              <label style={{ display: "grid", gap: "8px", color: textSoft }}>
+              <div style={{ display: "grid", gap: "8px", color: textSoft }}>
                 <span>Word strength</span>
-                <select
-                  className="game-select"
-                  value={strengthFilter}
-                  onChange={(event) => setStrengthFilter(event.target.value)}
+                <div
                   style={{
-                    appearance: "none",
-                    borderRadius: "16px",
-                    border: "1px solid rgba(130, 151, 255, 0.18)",
-                    padding: "14px 16px",
-                    background: "rgba(255,255,255,0.06)",
-                    color: textStrong,
-                    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gap: "10px",
                   }}
                 >
-                  {strengthOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  {strengthOptions.map((option) => {
+                    const isActive = selectedStrengths.includes(option.value);
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleToggleStrength(option.value)}
+                        style={{
+                          width: "100%",
+                          borderRadius: "999px",
+                          padding: "11px 16px",
+                          border: isActive
+                            ? "1px solid rgba(118, 247, 213, 0.42)"
+                            : "1px solid rgba(130, 151, 255, 0.18)",
+                          background: isActive
+                            ? "linear-gradient(180deg, rgba(72, 183, 255, 0.16), rgba(255, 77, 157, 0.1))"
+                            : "rgba(255,255,255,0.04)",
+                          color: textStrong,
+                          cursor: "pointer",
+                          boxShadow: isActive
+                            ? "0 0 22px rgba(118, 247, 213, 0.08)"
+                            : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedStrengths.length === 0 ? (
+                  <p style={{ margin: 0, color: "#ffb6d7", fontSize: "0.92rem" }}>
+                    Choose at least one word strength to build the quiz.
+                  </p>
+                ) : null}
+              </div>
+
+              <div style={{ display: "grid", gap: "8px", color: textSoft }}>
+                <span>Question format</span>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  {questionTypeOptions.map((option) => {
+                    const isActive = selectedQuestionTypes.includes(option.value);
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleToggleQuestionType(option.value)}
+                        style={{
+                          borderRadius: "999px",
+                          padding: "11px 16px",
+                          border: isActive
+                            ? "1px solid rgba(118, 247, 213, 0.42)"
+                            : "1px solid rgba(130, 151, 255, 0.18)",
+                          background: isActive
+                            ? "linear-gradient(180deg, rgba(72, 183, 255, 0.16), rgba(255, 77, 157, 0.1))"
+                            : "rgba(255,255,255,0.04)",
+                          color: textStrong,
+                          cursor: "pointer",
+                          boxShadow: isActive
+                            ? "0 0 22px rgba(118, 247, 213, 0.08)"
+                            : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedQuestionTypes.length === 0 ? (
+                  <p style={{ margin: 0, color: "#ffb6d7", fontSize: "0.92rem" }}>
+                    Choose at least one question format to build the quiz.
+                  </p>
+                ) : null}
+              </div>
             </section>
+
+            {error === chooseDeckErrorMessage ? (
+              <p style={{ margin: "0 0 -8px", color: "#ffb6d7", fontSize: "0.92rem" }}>
+                {chooseDeckErrorMessage}
+              </p>
+            ) : null}
 
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <button
@@ -856,9 +1206,14 @@ export default function GamePage() {
               <p style={{ margin: 0, color: "#76f7d5" }}>
                 Question {currentQuestionIndex + 1} of {quizQuestions.length}
               </p>
-              <p style={{ margin: 0, color: textMuted }}>
-                Score: {score}
-              </p>
+              <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+                <p style={{ margin: 0, color: textMuted }}>
+                  Score: {score}
+                </p>
+                <p style={{ margin: 0, color: textMuted }}>
+                  Time: {formatElapsedTime(elapsedSeconds)}
+                </p>
+              </div>
             </div>
 
             <div
@@ -880,7 +1235,10 @@ export default function GamePage() {
                   fontSize: "0.75rem",
                 }}
               >
-                {currentQuestion.language} - {currentQuestion.deckName}
+                {currentQuestion.language} - {currentQuestion.deckName} -{" "}
+                {currentQuestion.type === "translation"
+                  ? "Translation"
+                  : "Multiple choice"}
               </p>
               <h2
                 style={{
@@ -892,58 +1250,121 @@ export default function GamePage() {
                 {currentQuestion.prompt}
               </h2>
               <p style={{ margin: 0, color: textMuted }}>
-                Choose the best translation below.
+                {currentQuestion.type === "translation"
+                  ? "Type the translation below."
+                  : "Choose the best translation below."}
               </p>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: "12px",
-              }}
-            >
-              {currentQuestion.options.map((option) => {
-                const isSelected = selectedAnswer === option;
-                const isCorrect = submittedAnswer && option === currentQuestion.correctAnswer;
-                const isWrongSelection =
-                  submittedAnswer &&
-                  submittedAnswer === option &&
-                  option !== currentQuestion.correctAnswer;
-
-                return (
+            {currentQuestion.type === "translation" ? (
+              <div
+                style={{
+                  display: "grid",
+                  gap: "14px",
+                  maxWidth: "560px",
+                }}
+              >
+                <input
+                  ref={translationInputRef}
+                  value={translationAnswer}
+                  onChange={(event) => {
+                    setTranslationAnswer(event.target.value);
+                    if (error === "Type a translation before submitting your answer.") {
+                      setError("");
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleSubmitTranslation();
+                    }
+                  }}
+                  disabled={Boolean(submittedAnswer)}
+                  placeholder="Type the translation"
+                  style={{
+                    borderRadius: "20px",
+                    border: submittedAnswer?.isCorrect
+                      ? "1px solid rgba(118, 247, 213, 0.55)"
+                      : submittedAnswer
+                        ? "1px solid rgba(255, 96, 146, 0.4)"
+                        : "1px solid rgba(130, 151, 255, 0.18)",
+                    padding: "18px",
+                    background: submittedAnswer?.isCorrect
+                      ? "rgba(118, 247, 213, 0.12)"
+                      : submittedAnswer
+                        ? "rgba(255, 77, 157, 0.12)"
+                        : "rgba(255,255,255,0.04)",
+                    color: textStrong,
+                    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
+                  }}
+                />
+                {submittedAnswer && !submittedAnswer.isCorrect ? (
+                  <p style={{ margin: 0, color: textMuted }}>
+                    Correct answer: {currentQuestion.correctAnswer}
+                  </p>
+                ) : null}
+                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
                   <button
-                    key={option}
                     type="button"
-                    disabled={Boolean(submittedAnswer)}
-                    onClick={() => handleSelectAnswer(option)}
-                    style={{
-                      textAlign: "left",
-                      borderRadius: "20px",
-                      border: isCorrect
-                        ? "1px solid rgba(118, 247, 213, 0.55)"
-                        : isWrongSelection
-                          ? "1px solid rgba(255, 96, 146, 0.4)"
-                          : isSelected
-                            ? "1px solid rgba(72, 183, 255, 0.48)"
-                            : "1px solid rgba(130, 151, 255, 0.18)",
-                      padding: "18px",
-                      background: isCorrect
-                        ? "rgba(118, 247, 213, 0.12)"
-                        : isWrongSelection
-                          ? "rgba(255, 77, 157, 0.12)"
-                          : isSelected
-                            ? "rgba(72, 183, 255, 0.12)"
-                            : "rgba(255,255,255,0.04)",
-                      color: textStrong,
-                      cursor: submittedAnswer ? "default" : "pointer",
-                    }}
+                    onClick={handleSubmitTranslation}
+                    disabled={Boolean(submittedAnswer) || !translationAnswer.trim()}
+                    style={primaryButtonStyle}
                   >
-                    {option}
+                    Submit answer
                   </button>
-                );
-              })}
-            </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  gap: "12px",
+                }}
+              >
+                {currentQuestion.options.map((option) => {
+                  const isSelected = selectedAnswer === option;
+                  const isCorrect =
+                    submittedAnswer && option === currentQuestion.correctAnswer;
+                  const isWrongSelection =
+                    submittedAnswer &&
+                    submittedAnswer.value === option &&
+                    option !== currentQuestion.correctAnswer;
+
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      disabled={Boolean(submittedAnswer)}
+                      onClick={() => handleSelectAnswer(option)}
+                      style={{
+                        textAlign: "left",
+                        borderRadius: "20px",
+                        border: isCorrect
+                          ? "1px solid rgba(118, 247, 213, 0.55)"
+                          : isWrongSelection
+                            ? "1px solid rgba(255, 96, 146, 0.4)"
+                            : isSelected
+                              ? "1px solid rgba(72, 183, 255, 0.48)"
+                              : "1px solid rgba(130, 151, 255, 0.18)",
+                        padding: "18px",
+                        background: isCorrect
+                          ? "rgba(118, 247, 213, 0.12)"
+                          : isWrongSelection
+                            ? "rgba(255, 77, 157, 0.12)"
+                            : isSelected
+                              ? "rgba(72, 183, 255, 0.12)"
+                              : "rgba(255,255,255,0.04)",
+                        color: textStrong,
+                        cursor: submittedAnswer ? "default" : "pointer",
+                      }}
+                    >
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <button type="button" onClick={handleResetQuiz} style={secondaryButtonStyle}>
@@ -983,15 +1404,32 @@ export default function GamePage() {
               <p style={{ margin: 0, color: textMuted }}>
                 Accuracy: {Math.round((score / quizQuestions.length) * 100)}%
               </p>
+              <p style={{ margin: 0, color: textMuted }}>
+                Time: {formatElapsedTime(completedElapsedSeconds)}
+              </p>
             </div>
 
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              <button type="button" onClick={handleResetQuiz} style={primaryButtonStyle}>
-                Play again
+              <button
+                type="button"
+                onClick={() => {
+                  void handlePlayAgain();
+                }}
+                disabled={quizLoading}
+                style={primaryButtonStyle}
+              >
+                {quizLoading ? "Building quiz..." : "Play again"}
+              </button>
+              <button type="button" onClick={handleResetQuiz} style={secondaryButtonStyle}>
+                Back to quiz builder
               </button>
               <button
                 type="button"
-                onClick={() => setActiveMode("hub")}
+                onClick={() => {
+                  resetQuizState();
+                  setActiveMode("hub");
+                  setError("");
+                }}
                 style={secondaryButtonStyle}
               >
                 Back to game hub
