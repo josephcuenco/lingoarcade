@@ -139,6 +139,36 @@ const formatAccuracy = (accuracy, attempts) => {
   return `${Math.round((accuracy || 0) * 100)}% accuracy`;
 };
 
+const getDefaultLanguageFromLists = (lists) => {
+  if (!lists.length) {
+    return "";
+  }
+
+  const mostRecentlyPlayedDeck = lists
+    .filter((list) => list.last_practiced_at)
+    .sort(
+      (left, right) =>
+        new Date(right.last_practiced_at).getTime() -
+        new Date(left.last_practiced_at).getTime(),
+    )[0];
+
+  if (mostRecentlyPlayedDeck) {
+    return mostRecentlyPlayedDeck.language;
+  }
+
+  const mostRecentlyCreatedDeck = [...lists].sort(
+    (left, right) =>
+      new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+  )[0];
+
+  return mostRecentlyCreatedDeck?.language || "";
+};
+
+const handleDeckWordScroll = (event) => {
+  event.preventDefault();
+  event.currentTarget.scrollTop += event.deltaY * 0.10;
+};
+
 export default function ListsPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -200,7 +230,7 @@ export default function ListsPage() {
             return currentLanguage;
           }
 
-          return nextLists[0]?.language || "";
+          return getDefaultLanguageFromLists(nextLists);
         });
       } catch (err) {
         if (err.response?.status === 401) {
@@ -1448,7 +1478,10 @@ export default function ListsPage() {
                                 No words in this deck yet. Add the first one above.
                               </div>
                             ) : (
-                              <div className="deck-word-scroll">
+                              <div
+                                className="deck-word-scroll"
+                                onWheel={handleDeckWordScroll}
+                              >
                                 {words.map((word) => (
                                   (() => {
                                     const strengthStyle = getStrengthStyle(word.strength);

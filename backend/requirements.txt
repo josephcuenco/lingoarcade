@@ -5,8 +5,10 @@ psycopg[binary]
 alembic
 pydantic-settings
 python-jose[cryptography]
-passlib[bcrypt<5]
+passlib
+bcrypt<4.1
 celery
 redis
 python-multipart
 email-validator
+openai

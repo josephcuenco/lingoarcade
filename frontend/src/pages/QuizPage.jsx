@@ -2,206 +2,51 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../auth/useAuth";
+import {
+  buildQuizQuestions,
+  chooseDeckErrorMessage,
+  formatElapsedTime,
+  formatLastPlayed,
+  normalizeAnswer,
+  panelBackground,
+  panelBorder,
+  panelShadow,
+  primaryButtonStyle,
+  questionTypeOptions,
+  secondaryButtonStyle,
+  strengthOptions,
+  strengthStyles,
+  textMuted,
+  textSoft,
+  textStrong,
+} from "./gameShared";
 
-const textMuted = "#bfc7e6";
-const textSoft = "#cfd6ef";
-const textStrong = "#f7f8ff";
-const panelBackground =
-  "linear-gradient(180deg, rgba(17, 21, 36, 0.92), rgba(12, 15, 28, 0.92))";
-const panelBorder = "1px solid rgba(130, 151, 255, 0.18)";
-const panelShadow =
-  "0 24px 70px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04)";
+const getDefaultLanguageFromLists = (lists) => {
+  if (!lists.length) {
+    return "";
+  }
 
-const primaryButtonStyle = {
-  border: "none",
-  borderRadius: "999px",
-  padding: "12px 18px",
-  background: "linear-gradient(135deg, #48b7ff 0%, #935dff 48%, #ff4d9d 100%)",
-  color: "#f8f5ef",
-  cursor: "pointer",
-  boxShadow: "0 18px 35px rgba(112, 85, 255, 0.3)",
+  const mostRecentlyPlayedDeck = lists
+    .filter((list) => list.last_practiced_at)
+    .sort(
+      (left, right) =>
+        new Date(right.last_practiced_at).getTime() -
+        new Date(left.last_practiced_at).getTime(),
+    )[0];
+
+  if (mostRecentlyPlayedDeck) {
+    return mostRecentlyPlayedDeck.language;
+  }
+
+  const mostRecentlyCreatedDeck = [...lists].sort(
+    (left, right) =>
+      new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+  )[0];
+
+  return mostRecentlyCreatedDeck?.language || "";
 };
 
-const secondaryButtonStyle = {
-  border: "1px solid rgba(130, 151, 255, 0.18)",
-  borderRadius: "999px",
-  padding: "12px 18px",
-  background: "rgba(255,255,255,0.06)",
-  color: textStrong,
-  cursor: "pointer",
-  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
-};
-
-const gameOptions = [
-  {
-    name: "Quiz",
-    accent: "#76f7d5",
-    description: "Quick recall rounds with prompts and answers pulled from your decks.",
-    status: "available",
-  },
-  {
-    name: "Word Search",
-    accent: "#48b7ff",
-    description: "Find hidden vocabulary terms in a puzzle grid built from your study words.",
-    status: "coming-soon",
-  },
-  {
-    name: "Bingo",
-    accent: "#ffb86c",
-    description: "Match prompts to the right words and fill a board as you play.",
-    status: "coming-soon",
-  },
-  {
-    name: "Crossword",
-    accent: "#ff79c6",
-    description: "Solve clue-based grids using the words and translations from your decks.",
-    status: "coming-soon",
-  },
-  {
-    name: "Word Builder",
-    accent: "#b388ff",
-    description: "Assemble words from fragments and practice spelling and recognition.",
-    status: "coming-soon",
-  },
-];
-
-const strengthOptions = [
-  { value: "weak", label: "Weak words" },
-  { value: "okay", label: "Okay words" },
-  { value: "strong", label: "Strong words" },
-];
-
-const questionTypeOptions = [
-  { value: "multiple-choice", label: "Multiple choice" },
-  { value: "translation", label: "Translation" },
-];
-
-const chooseDeckErrorMessage = "Choose at least one deck for the quiz.";
-
-const strengthStyles = {
-  weak: {
-    label: "Weak",
-    color: "#ffb5d5",
-    border: "1px solid rgba(255, 92, 156, 0.28)",
-    background: "rgba(255, 77, 157, 0.14)",
-  },
-  okay: {
-    label: "Okay",
-    color: "#ffe3a3",
-    border: "1px solid rgba(255, 197, 74, 0.26)",
-    background: "rgba(255, 197, 74, 0.12)",
-  },
-  strong: {
-    label: "Strong",
-    color: "#8ff8de",
-    border: "1px solid rgba(118, 247, 213, 0.3)",
-    background: "rgba(118, 247, 213, 0.12)",
-  },
-};
-
-function formatLastPlayed(lastPracticedAt) {
-  if (!lastPracticedAt) {
-    return "Not played yet";
-  }
-
-  const practicedDate = new Date(lastPracticedAt);
-  const currentDate = new Date();
-  practicedDate.setHours(0, 0, 0, 0);
-  currentDate.setHours(0, 0, 0, 0);
-
-  const dayDifference = Math.round(
-    (currentDate.getTime() - practicedDate.getTime()) / (1000 * 60 * 60 * 24),
-  );
-
-  if (dayDifference <= 0) {
-    return "Played today";
-  }
-
-  if (dayDifference === 1) {
-    return "Played yesterday";
-  }
-
-  return `Played ${dayDifference} days ago`;
-}
-
-function shuffle(items) {
-  const nextItems = [...items];
-
-  for (let index = nextItems.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [nextItems[index], nextItems[randomIndex]] = [
-      nextItems[randomIndex],
-      nextItems[index],
-    ];
-  }
-
-  return nextItems;
-}
-
-function normalizeAnswer(value) {
-  return value.trim().toLowerCase();
-}
-
-function formatElapsedTime(totalSeconds) {
-  const safeSeconds = Math.max(0, totalSeconds);
-  const minutes = Math.floor(safeSeconds / 60);
-  const seconds = safeSeconds % 60;
-
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-function buildQuizQuestions(words, limit, selectedQuestionTypes) {
-  const eligibleWords = words.filter((word) => word.definition);
-  const shuffledWords = shuffle(eligibleWords).slice(0, limit);
-  const questionTypes =
-    selectedQuestionTypes.length > 0 ? selectedQuestionTypes : ["multiple-choice"];
-  const questionTypeSequence = shuffle(
-    Array.from({ length: shuffledWords.length }, (_, index) =>
-      questionTypes[index % questionTypes.length],
-    ),
-  );
-
-  return shuffledWords
-    .map((word, index) => {
-      const questionType = questionTypeSequence[index];
-
-      if (questionType === "translation") {
-        return {
-          id: word.id,
-          type: "translation",
-          prompt: word.term,
-          correctAnswer: word.definition,
-          deckName: word.deckName,
-          language: word.language,
-        };
-      }
-
-      const distractors = shuffle(
-        eligibleWords
-          .filter((candidate) => candidate.id !== word.id)
-          .map((candidate) => candidate.definition),
-      )
-        .filter((definition, optionIndex, definitions) =>
-          definitions.indexOf(definition) === optionIndex,
-        )
-        .slice(0, 3);
-
-      const options = shuffle([word.definition, ...distractors]).slice(0, 4);
-
-      return {
-        id: word.id,
-        type: "multiple-choice",
-        prompt: word.term,
-        correctAnswer: word.definition,
-        options,
-        deckName: word.deckName,
-        language: word.language,
-      };
-    })
-    .filter((question) => question.type === "translation" || question.options.length === 4);
-}
-
-export default function GamePage() {
+export default function QuizPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [lists, setLists] = useState([]);
@@ -220,7 +65,8 @@ export default function GamePage() {
   const [loading, setLoading] = useState(true);
   const [quizLoading, setQuizLoading] = useState(false);
   const [error, setError] = useState("");
-  const [activeMode, setActiveMode] = useState("hub");
+  const [activeMode, setActiveMode] = useState("setup");
+  const [setupStep, setSetupStep] = useState(1);
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -295,9 +141,11 @@ export default function GamePage() {
     }
 
     setSelectedLanguage((currentLanguage) =>
-      availableLanguages.includes(currentLanguage) ? currentLanguage : availableLanguages[0],
+      availableLanguages.includes(currentLanguage)
+        ? currentLanguage
+        : getDefaultLanguageFromLists(lists),
     );
-  }, [availableLanguages]);
+  }, [availableLanguages, lists]);
 
   useEffect(() => {
     if (!selectedLanguage) {
@@ -312,8 +160,8 @@ export default function GamePage() {
   }, [selectedLanguage, visibleDecks]);
 
   const currentQuestion = quizQuestions[currentQuestionIndex];
-  const isQuizActive = activeMode === "quiz-play";
-  const isQuizComplete = activeMode === "quiz-results";
+  const isQuizActive = activeMode === "play";
+  const isQuizComplete = activeMode === "results";
 
   useEffect(() => {
     if (!isQuizActive || !quizStartedAt) {
@@ -321,9 +169,7 @@ export default function GamePage() {
     }
 
     const updateElapsedTime = () => {
-      setElapsedSeconds(
-        Math.floor((Date.now() - quizStartedAt.getTime()) / 1000),
-      );
+      setElapsedSeconds(Math.floor((Date.now() - quizStartedAt.getTime()) / 1000));
     };
 
     updateElapsedTime();
@@ -335,11 +181,7 @@ export default function GamePage() {
   }, [isQuizActive, quizStartedAt]);
 
   useEffect(() => {
-    if (
-      !isQuizActive ||
-      currentQuestion?.type !== "translation" ||
-      submittedAnswer
-    ) {
+    if (!isQuizActive || currentQuestion?.type !== "translation" || submittedAnswer) {
       return;
     }
 
@@ -384,7 +226,7 @@ export default function GamePage() {
             );
           }
         })();
-        setActiveMode("quiz-results");
+        setActiveMode("results");
         return;
       }
 
@@ -468,6 +310,16 @@ export default function GamePage() {
     setCompletedElapsedSeconds(0);
   };
 
+  const handleGoToOptionsStep = () => {
+    if (selectedDeckIds.length === 0) {
+      setError(chooseDeckErrorMessage);
+      return;
+    }
+
+    setError("");
+    setSetupStep(2);
+  };
+
   const handleStartQuiz = async () => {
     if (selectedDeckIds.length === 0) {
       setError(chooseDeckErrorMessage);
@@ -504,6 +356,24 @@ export default function GamePage() {
         selectedStrengths.includes(word.strength || "weak"),
       );
 
+      let quizWords = filteredWords;
+
+      if (selectedQuestionTypes.includes("fill-blank") && filteredWords.length > 0) {
+        const fillBlankResponse = await api.post("/lists/words/fill-blank-sentences", {
+          word_ids: filteredWords.map((word) => word.id),
+        });
+
+        const fillBlankWordsById = new Map(
+          fillBlankResponse.data.map((word) => [word.id, word.fill_blank_sentence]),
+        );
+
+        quizWords = filteredWords.map((word) => ({
+          ...word,
+          fill_blank_sentence:
+            fillBlankWordsById.get(word.id) ?? word.fill_blank_sentence ?? null,
+        }));
+      }
+
       const strengthLabel = selectedStrengths
         .map(
           (strength) =>
@@ -518,18 +388,20 @@ export default function GamePage() {
       }
 
       if (
-        selectedQuestionTypes.includes("multiple-choice") &&
+        selectedQuestionTypes.some((questionType) =>
+          ["multiple-choice", "fill-blank"].includes(questionType),
+        ) &&
         filteredWords.length < 4
       ) {
         setError(
-          `You need at least 4 ${strengthLabel} across the selected decks to include multiple-choice questions.`,
+          `You need at least 4 ${strengthLabel} across the selected decks to include multiple-choice or fill in the blank questions.`,
         );
         return;
       }
 
       const nextQuestions = buildQuizQuestions(
-        filteredWords,
-        Math.min(questionCount, filteredWords.length),
+        quizWords,
+        Math.min(questionCount, quizWords.length),
         selectedQuestionTypes,
       );
 
@@ -545,7 +417,7 @@ export default function GamePage() {
       setElapsedSeconds(0);
       setCompletedElapsedSeconds(0);
       setQuizQuestions(nextQuestions);
-      setActiveMode("quiz-play");
+      setActiveMode("play");
     } catch (err) {
       if (err.response?.status === 401) {
         handleUnauthorized();
@@ -559,7 +431,11 @@ export default function GamePage() {
   };
 
   const handleSelectAnswer = (answer) => {
-    if (!currentQuestion || submittedAnswer || currentQuestion.type !== "multiple-choice") {
+    if (
+      !currentQuestion ||
+      submittedAnswer ||
+      !["multiple-choice", "true-false", "fill-blank"].includes(currentQuestion.type)
+    ) {
       return;
     }
 
@@ -610,18 +486,13 @@ export default function GamePage() {
 
   const handleResetQuiz = () => {
     resetQuizState();
-    setActiveMode("quiz-setup");
+    setActiveMode("setup");
+    setSetupStep(1);
     setError("");
   };
 
   const handlePlayAgain = async () => {
     await handleStartQuiz();
-  };
-
-  const handleOpenQuizSetup = () => {
-    resetQuizState();
-    setActiveMode("quiz-setup");
-    setError("");
   };
 
   return (
@@ -669,6 +540,13 @@ export default function GamePage() {
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <button
                 type="button"
+                onClick={() => navigate("/games")}
+                style={secondaryButtonStyle}
+              >
+                Back to game hub
+              </button>
+              <button
+                type="button"
                 onClick={() => navigate("/lists")}
                 style={secondaryButtonStyle}
               >
@@ -694,7 +572,7 @@ export default function GamePage() {
                 fontSize: "0.78rem",
               }}
             >
-              Game hub
+              Quiz
             </p>
             <h1
               style={{
@@ -710,9 +588,7 @@ export default function GamePage() {
                 ? "Quiz in progress."
                 : isQuizComplete
                   ? "Quiz complete."
-                  : activeMode === "quiz-setup"
-                    ? "Build your quiz session."
-                    : "Pick how you want to practice."}
+                  : "Build your quiz session."}
             </h1>
             <p
               style={{
@@ -725,10 +601,8 @@ export default function GamePage() {
               {isQuizActive
                 ? "Choose the best translation for each prompt and work your way through the deck mix."
                 : isQuizComplete
-                  ? "Review your score, then jump back in with a fresh shuffle whenever you're ready."
-                  : activeMode === "quiz-setup"
-                    ? "Choose one or more decks, set the quiz size, and we'll build a multiple-choice round from your words."
-                    : "This is the first version of the game page. Quiz is ready to play now, and the other formats are staged for the next rounds of development."}
+                  ? "Review your score and time, then jump back in with a fresh shuffle whenever you're ready."
+                  : "Choose a language, pick your decks, set the quiz mix, and we'll build a round from your words."}
             </p>
           </div>
         </section>
@@ -747,66 +621,7 @@ export default function GamePage() {
           </section>
         ) : null}
 
-        {activeMode === "hub" ? (
-          <section
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: "18px",
-            }}
-          >
-            {gameOptions.map((option) => (
-              <article
-                key={option.name}
-                style={{
-                  background: panelBackground,
-                  border: panelBorder,
-                  borderRadius: "24px",
-                  padding: "22px",
-                  boxShadow: panelShadow,
-                  display: "grid",
-                  gap: "14px",
-                  minHeight: "220px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "52px",
-                    height: "52px",
-                    borderRadius: "18px",
-                    background: `linear-gradient(135deg, ${option.accent}, rgba(255,255,255,0.08))`,
-                    boxShadow: `0 0 24px ${option.accent}22`,
-                  }}
-                />
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <h2 style={{ margin: 0, color: textStrong, fontSize: "1.35rem" }}>
-                    {option.name}
-                  </h2>
-                  <p style={{ margin: 0, color: textMuted, lineHeight: 1.6 }}>
-                    {option.description}
-                  </p>
-                </div>
-                <div style={{ marginTop: "auto" }}>
-                  {option.status === "available" ? (
-                    <button
-                      type="button"
-                      style={primaryButtonStyle}
-                      onClick={handleOpenQuizSetup}
-                    >
-                      Play quiz
-                    </button>
-                  ) : (
-                    <button type="button" style={secondaryButtonStyle}>
-                      Coming soon
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
-          </section>
-        ) : null}
-
-        {activeMode === "quiz-setup" ? (
+        {!isQuizActive && !isQuizComplete ? (
           <section
             style={{
               background: panelBackground,
@@ -840,29 +655,35 @@ export default function GamePage() {
                   Quiz setup
                 </p>
                 <h2 style={{ margin: "8px 0 0", color: textStrong, fontSize: "1.9rem" }}>
-                  Choose your decks
+                  {setupStep === 1 ? "Choose your decks" : "Set up your quiz"}
                 </h2>
               </div>
 
-              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={handleSelectAllDecks}
-                  style={secondaryButtonStyle}
-                >
-                  Select all
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClearDeckSelection}
-                  style={secondaryButtonStyle}
-                >
-                  Clear
-                </button>
-              </div>
+              {setupStep === 1 ? (
+                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={handleSelectAllDecks}
+                    style={secondaryButtonStyle}
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearDeckSelection}
+                    style={secondaryButtonStyle}
+                  >
+                    Clear
+                  </button>
+                </div>
+              ) : (
+                <p style={{ margin: 0, color: textMuted, fontSize: "0.92rem" }}>
+                  Step 2 of 2
+                </p>
+              )}
             </div>
 
-            {loading ? (
+            {setupStep === 1 ? loading ? (
               <p style={{ margin: 0, color: textMuted }}>Loading your decks...</p>
             ) : lists.length === 0 ? (
               <div
@@ -1037,147 +858,160 @@ export default function GamePage() {
                   </section>
                 ) : null}
               </div>
+            ) : (
+              <section
+                style={{
+                  borderTop: "1px solid rgba(130, 151, 255, 0.14)",
+                  paddingTop: "20px",
+                  display: "grid",
+                  gap: "12px",
+                  maxWidth: "360px",
+                }}
+              >
+                <label style={{ display: "grid", gap: "8px", color: textSoft }}>
+                  <span>Question count</span>
+                  <select
+                    className="game-select"
+                    value={questionCount}
+                    onChange={(event) => setQuestionCount(Number(event.target.value))}
+                    style={{
+                      appearance: "none",
+                      borderRadius: "16px",
+                      border: "1px solid rgba(130, 151, 255, 0.18)",
+                      padding: "14px 16px",
+                      background: "rgba(255,255,255,0.06)",
+                      color: textStrong,
+                      boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
+                    }}
+                  >
+                    <option value={5}>5 questions</option>
+                    <option value={10}>10 questions</option>
+                    <option value={15}>15 questions</option>
+                  </select>
+                </label>
+
+                <div style={{ display: "grid", gap: "8px", color: textSoft }}>
+                  <span>Word strength</span>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                      gap: "10px",
+                    }}
+                  >
+                    {strengthOptions.map((option) => {
+                      const isActive = selectedStrengths.includes(option.value);
+
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleToggleStrength(option.value)}
+                          style={{
+                            width: "100%",
+                            borderRadius: "999px",
+                            padding: "11px 16px",
+                            border: isActive
+                              ? "1px solid rgba(118, 247, 213, 0.42)"
+                              : "1px solid rgba(130, 151, 255, 0.18)",
+                            background: isActive
+                              ? "linear-gradient(180deg, rgba(72, 183, 255, 0.16), rgba(255, 77, 157, 0.1))"
+                              : "rgba(255,255,255,0.04)",
+                            color: textStrong,
+                            cursor: "pointer",
+                            boxShadow: isActive
+                              ? "0 0 22px rgba(118, 247, 213, 0.08)"
+                              : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedStrengths.length === 0 ? (
+                    <p style={{ margin: 0, color: "#ffb6d7", fontSize: "0.92rem" }}>
+                      Choose at least one word strength to build the quiz.
+                    </p>
+                  ) : null}
+                </div>
+
+                <div style={{ display: "grid", gap: "8px", color: textSoft }}>
+                  <span>Question format</span>
+                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                    {questionTypeOptions.map((option) => {
+                      const isActive = selectedQuestionTypes.includes(option.value);
+
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleToggleQuestionType(option.value)}
+                          style={{
+                            borderRadius: "999px",
+                            padding: "11px 16px",
+                            border: isActive
+                              ? "1px solid rgba(118, 247, 213, 0.42)"
+                              : "1px solid rgba(130, 151, 255, 0.18)",
+                            background: isActive
+                              ? "linear-gradient(180deg, rgba(72, 183, 255, 0.16), rgba(255, 77, 157, 0.1))"
+                              : "rgba(255,255,255,0.04)",
+                            color: textStrong,
+                            cursor: "pointer",
+                            boxShadow: isActive
+                              ? "0 0 22px rgba(118, 247, 213, 0.08)"
+                              : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedQuestionTypes.length === 0 ? (
+                    <p style={{ margin: 0, color: "#ffb6d7", fontSize: "0.92rem" }}>
+                      Choose at least one question format to build the quiz.
+                    </p>
+                  ) : null}
+                </div>
+              </section>
             )}
 
-            <section
-              style={{
-                borderTop: "1px solid rgba(130, 151, 255, 0.14)",
-                paddingTop: "20px",
-                display: "grid",
-                gap: "12px",
-                maxWidth: "360px",
-              }}
-            >
-              <label style={{ display: "grid", gap: "8px", color: textSoft }}>
-                <span>Question count</span>
-                <select
-                  className="game-select"
-                  value={questionCount}
-                  onChange={(event) => setQuestionCount(Number(event.target.value))}
-                  style={{
-                    appearance: "none",
-                    borderRadius: "16px",
-                    border: "1px solid rgba(130, 151, 255, 0.18)",
-                    padding: "14px 16px",
-                    background: "rgba(255,255,255,0.06)",
-                    color: textStrong,
-                    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
-                  }}
-                >
-                  <option value={5}>5 questions</option>
-                  <option value={10}>10 questions</option>
-                  <option value={15}>15 questions</option>
-                </select>
-              </label>
-
-              <div style={{ display: "grid", gap: "8px", color: textSoft }}>
-                <span>Word strength</span>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                    gap: "10px",
-                  }}
-                >
-                  {strengthOptions.map((option) => {
-                    const isActive = selectedStrengths.includes(option.value);
-
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => handleToggleStrength(option.value)}
-                        style={{
-                          width: "100%",
-                          borderRadius: "999px",
-                          padding: "11px 16px",
-                          border: isActive
-                            ? "1px solid rgba(118, 247, 213, 0.42)"
-                            : "1px solid rgba(130, 151, 255, 0.18)",
-                          background: isActive
-                            ? "linear-gradient(180deg, rgba(72, 183, 255, 0.16), rgba(255, 77, 157, 0.1))"
-                            : "rgba(255,255,255,0.04)",
-                          color: textStrong,
-                          cursor: "pointer",
-                          boxShadow: isActive
-                            ? "0 0 22px rgba(118, 247, 213, 0.08)"
-                            : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
-                        }}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {selectedStrengths.length === 0 ? (
-                  <p style={{ margin: 0, color: "#ffb6d7", fontSize: "0.92rem" }}>
-                    Choose at least one word strength to build the quiz.
-                  </p>
-                ) : null}
-              </div>
-
-              <div style={{ display: "grid", gap: "8px", color: textSoft }}>
-                <span>Question format</span>
-                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                  {questionTypeOptions.map((option) => {
-                    const isActive = selectedQuestionTypes.includes(option.value);
-
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => handleToggleQuestionType(option.value)}
-                        style={{
-                          borderRadius: "999px",
-                          padding: "11px 16px",
-                          border: isActive
-                            ? "1px solid rgba(118, 247, 213, 0.42)"
-                            : "1px solid rgba(130, 151, 255, 0.18)",
-                          background: isActive
-                            ? "linear-gradient(180deg, rgba(72, 183, 255, 0.16), rgba(255, 77, 157, 0.1))"
-                            : "rgba(255,255,255,0.04)",
-                          color: textStrong,
-                          cursor: "pointer",
-                          boxShadow: isActive
-                            ? "0 0 22px rgba(118, 247, 213, 0.08)"
-                            : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
-                        }}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {selectedQuestionTypes.length === 0 ? (
-                  <p style={{ margin: 0, color: "#ffb6d7", fontSize: "0.92rem" }}>
-                    Choose at least one question format to build the quiz.
-                  </p>
-                ) : null}
-              </div>
-            </section>
-
-            {error === chooseDeckErrorMessage ? (
+            {setupStep === 1 && error === chooseDeckErrorMessage ? (
               <p style={{ margin: "0 0 -8px", color: "#ffb6d7", fontSize: "0.92rem" }}>
                 {chooseDeckErrorMessage}
               </p>
             ) : null}
 
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={handleStartQuiz}
-                style={primaryButtonStyle}
-                disabled={quizLoading || loading || lists.length === 0}
-              >
-                {quizLoading ? "Building quiz..." : "Start quiz"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveMode("hub")}
-                style={secondaryButtonStyle}
-              >
-                Back
-              </button>
+              {setupStep === 1 ? (
+                <button
+                  type="button"
+                  onClick={handleGoToOptionsStep}
+                  style={primaryButtonStyle}
+                  disabled={loading || lists.length === 0}
+                >
+                  Next
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSetupStep(1)}
+                    style={secondaryButtonStyle}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartQuiz}
+                    style={primaryButtonStyle}
+                    disabled={quizLoading || loading || lists.length === 0}
+                  >
+                    {quizLoading ? "Building quiz..." : "Start quiz"}
+                  </button>
+                </>
+              )}
             </div>
           </section>
         ) : null}
@@ -1235,10 +1069,15 @@ export default function GamePage() {
                   fontSize: "0.75rem",
                 }}
               >
-                {currentQuestion.language} - {currentQuestion.deckName} -{" "}
+                {currentQuestion.promptLanguage} to {currentQuestion.answerLanguage} -{" "}
+                {currentQuestion.deckName} -{" "}
                 {currentQuestion.type === "translation"
                   ? "Translation"
-                  : "Multiple choice"}
+                  : currentQuestion.type === "true-false"
+                    ? "True / False"
+                    : currentQuestion.type === "fill-blank"
+                      ? "Fill in the blank"
+                    : "Multiple choice"}
               </p>
               <h2
                 style={{
@@ -1247,12 +1086,18 @@ export default function GamePage() {
                   fontSize: "clamp(2rem, 5vw, 3.2rem)",
                 }}
               >
-                {currentQuestion.prompt}
+                {currentQuestion.type === "true-false"
+                  ? `${currentQuestion.prompt} = ${currentQuestion.statementAnswer}`
+                  : currentQuestion.prompt}
               </h2>
               <p style={{ margin: 0, color: textMuted }}>
                 {currentQuestion.type === "translation"
-                  ? "Type the translation below."
-                  : "Choose the best translation below."}
+                  ? `Type the ${currentQuestion.answerLanguage} translation below.`
+                  : currentQuestion.type === "true-false"
+                    ? `Decide whether this ${currentQuestion.answerLanguage} translation is true or false.`
+                    : currentQuestion.type === "fill-blank"
+                      ? `Choose the ${currentQuestion.answerLanguage} word or phrase that best completes the sentence.`
+                  : `Choose the best ${currentQuestion.answerLanguage} translation below.`}
               </p>
             </div>
 
@@ -1313,6 +1158,58 @@ export default function GamePage() {
                     Submit answer
                   </button>
                 </div>
+              </div>
+            ) : currentQuestion.type === "true-false" ? (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: "12px",
+                  maxWidth: "460px",
+                }}
+              >
+                {[true, false].map((option) => {
+                  const label = option ? "True" : "False";
+                  const isSelected = selectedAnswer === option;
+                  const isCorrect =
+                    submittedAnswer && option === currentQuestion.correctAnswer;
+                  const isWrongSelection =
+                    submittedAnswer &&
+                    submittedAnswer.value === option &&
+                    option !== currentQuestion.correctAnswer;
+
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      disabled={Boolean(submittedAnswer)}
+                      onClick={() => handleSelectAnswer(option)}
+                      style={{
+                        textAlign: "left",
+                        borderRadius: "20px",
+                        border: isCorrect
+                          ? "1px solid rgba(118, 247, 213, 0.55)"
+                          : isWrongSelection
+                            ? "1px solid rgba(255, 96, 146, 0.4)"
+                            : isSelected
+                              ? "1px solid rgba(72, 183, 255, 0.48)"
+                              : "1px solid rgba(130, 151, 255, 0.18)",
+                        padding: "18px",
+                        background: isCorrect
+                          ? "rgba(118, 247, 213, 0.12)"
+                          : isWrongSelection
+                            ? "rgba(255, 77, 157, 0.12)"
+                            : isSelected
+                              ? "rgba(72, 183, 255, 0.12)"
+                              : "rgba(255,255,255,0.04)",
+                        color: textStrong,
+                        cursor: submittedAnswer ? "default" : "pointer",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <div
@@ -1427,8 +1324,9 @@ export default function GamePage() {
                 type="button"
                 onClick={() => {
                   resetQuizState();
-                  setActiveMode("hub");
+                  setActiveMode("setup");
                   setError("");
+                  navigate("/games");
                 }}
                 style={secondaryButtonStyle}
               >

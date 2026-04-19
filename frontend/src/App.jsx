@@ -2,9 +2,10 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import AuthProvider from "./auth/AuthProvider";
 import ProtectedRoute from "./auth/ProtectedRoute";
-import GamePage from "./pages/GamePage";
+import GameHubPage from "./pages/GameHubPage";
 import ListsPage from "./pages/ListsPage";
 import LoginPage from "./pages/LoginPage";
+import QuizPage from "./pages/QuizPage";
 import RegisterPage from "./pages/RegisterPage";
 
 export default function App() {
@@ -27,7 +28,15 @@ export default function App() {
             path="/games"
             element={
               <ProtectedRoute>
-                <GamePage />
+                <GameHubPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/games/quiz"
+            element={
+              <ProtectedRoute>
+                <QuizPage />
               </ProtectedRoute>
             }
           />

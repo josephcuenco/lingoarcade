@@ -17,6 +17,7 @@ class ListResponse(BaseModel):
     weak_word_count: int
     okay_word_count: int
     strong_word_count: int
+    created_at: datetime
     last_practiced_at: datetime | None
 
     class Config:
@@ -31,6 +32,7 @@ class WordResponse(BaseModel):
     id: UUID
     term: str
     definition: str
+    fill_blank_sentence: str | None
     practice_attempts: int
     correct_attempts: int
     accuracy: float
@@ -67,3 +69,7 @@ class QuizResultItem(BaseModel):
 
 class RecordWordPerformanceRequest(BaseModel):
     results: list[QuizResultItem]
+
+
+class GenerateFillBlankSentencesRequest(BaseModel):
+    word_ids: list[UUID]

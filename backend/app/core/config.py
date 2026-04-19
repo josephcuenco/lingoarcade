@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     redis_url: str = "redis://localhost:6379/0"
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-5"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
