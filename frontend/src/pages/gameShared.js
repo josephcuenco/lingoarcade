@@ -33,6 +33,16 @@ export const gameOptions = [
     accent: "#76f7d5",
     description: "Quick recall rounds with prompts and answers pulled from your decks.",
     status: "available",
+    path: "/games/quiz",
+    buttonLabel: "Play quiz",
+  },
+  {
+    name: "Card Matching",
+    accent: "#ff79c6",
+    description: "Flip cards, find each word and translation pair, and race your best time.",
+    status: "available",
+    path: "/games/card-matching",
+    buttonLabel: "Play matching",
   },
   {
     name: "Word Search",
@@ -43,18 +53,20 @@ export const gameOptions = [
   {
     name: "Bingo",
     accent: "#ffb86c",
-    description: "Match prompts to the right words and fill a board as you play.",
-    status: "coming-soon",
+    description: "Race the timer as prompts appear and you find each translation on the board.",
+    status: "available",
+    path: "/games/bingo",
+    buttonLabel: "Play bingo",
   },
   {
     name: "Crossword",
-    accent: "#ff79c6",
+    accent: "#b388ff",
     description: "Solve clue-based grids using the words and translations from your decks.",
     status: "coming-soon",
   },
   {
     name: "Word Builder",
-    accent: "#b388ff",
+    accent: "#76f7d5",
     description: "Assemble words from fragments and practice spelling and recognition.",
     status: "coming-soon",
   },
@@ -70,7 +82,8 @@ export const questionTypeOptions = [
   { value: "multiple-choice", label: "Multiple choice" },
   { value: "translation", label: "Translation" },
   { value: "true-false", label: "True / False" },
-  { value: "fill-blank", label: "Fill in the blank" },
+  // AI fill-in-the-blank is paused while we think through the OpenAI direction.
+  // { value: "fill-blank", label: "Fill in the blank" },
 ];
 
 export const chooseDeckErrorMessage = "Choose at least one deck for the quiz.";
@@ -147,63 +160,64 @@ export function formatElapsedTime(totalSeconds) {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-function buildFillInBlankSentence(definition) {
-  const cleanedDefinition = definition.trim().replace(/[.!?]+$/g, "");
-  const normalizedDefinition = cleanedDefinition.toLowerCase();
-
-  const specialCases = [
-    {
-      matches: ["hello", "hi"],
-      sentence: "When I greet someone warmly, I say ____.",
-    },
-    {
-      matches: ["goodbye", "bye", "see you later"],
-      sentence: "When I leave at the end of a conversation, I say ____.",
-    },
-    {
-      matches: ["thank you", "thanks"],
-      sentence: "After someone helps me, I say ____.",
-    },
-    {
-      matches: ["please"],
-      sentence: "When I ask politely for something, I say ____.",
-    },
-    {
-      matches: ["sorry"],
-      sentence: "If I make a mistake and want to apologize, I say ____.",
-    },
-    {
-      matches: ["yes"],
-      sentence: "When I agree with someone, I say ____.",
-    },
-    {
-      matches: ["no"],
-      sentence: "When I disagree or refuse something, I say ____.",
-    },
-    {
-      matches: ["good morning"],
-      sentence: "At the start of the day, I greet someone by saying ____.",
-    },
-    {
-      matches: ["good night"],
-      sentence: "Before going to sleep, I say ____.",
-    },
-    {
-      matches: ["nice to meet you"],
-      sentence: "When I meet someone for the first time, I say ____.",
-    },
-  ];
-
-  const matchingTemplate = specialCases.find(({ matches }) =>
-    matches.includes(normalizedDefinition),
-  );
-
-  if (matchingTemplate) {
-    return matchingTemplate.sentence;
-  }
-
-  return `Choose the word or phrase that best completes this idea: "I want to say ${cleanedDefinition}, so I would use ____."`;
-}
+// AI fill-in-the-blank is paused while we think through the OpenAI direction.
+// function buildFillInBlankSentence(definition) {
+//   const cleanedDefinition = definition.trim().replace(/[.!?]+$/g, "");
+//   const normalizedDefinition = cleanedDefinition.toLowerCase();
+//
+//   const specialCases = [
+//     {
+//       matches: ["hello", "hi"],
+//       sentence: "When I greet someone warmly, I say ____.",
+//     },
+//     {
+//       matches: ["goodbye", "bye", "see you later"],
+//       sentence: "When I leave at the end of a conversation, I say ____.",
+//     },
+//     {
+//       matches: ["thank you", "thanks"],
+//       sentence: "After someone helps me, I say ____.",
+//     },
+//     {
+//       matches: ["please"],
+//       sentence: "When I ask politely for something, I say ____.",
+//     },
+//     {
+//       matches: ["sorry"],
+//       sentence: "If I make a mistake and want to apologize, I say ____.",
+//     },
+//     {
+//       matches: ["yes"],
+//       sentence: "When I agree with someone, I say ____.",
+//     },
+//     {
+//       matches: ["no"],
+//       sentence: "When I disagree or refuse something, I say ____.",
+//     },
+//     {
+//       matches: ["good morning"],
+//       sentence: "At the start of the day, I greet someone by saying ____.",
+//     },
+//     {
+//       matches: ["good night"],
+//       sentence: "Before going to sleep, I say ____.",
+//     },
+//     {
+//       matches: ["nice to meet you"],
+//       sentence: "When I meet someone for the first time, I say ____.",
+//     },
+//   ];
+//
+//   const matchingTemplate = specialCases.find(({ matches }) =>
+//     matches.includes(normalizedDefinition),
+//   );
+//
+//   if (matchingTemplate) {
+//     return matchingTemplate.sentence;
+//   }
+//
+//   return `Choose the word or phrase that best completes this idea: "I want to say ${cleanedDefinition}, so I would use ____."`;
+// }
 
 export function buildQuizQuestions(words, limit, selectedQuestionTypes) {
   const eligibleWords = words.filter((word) => word.definition);
@@ -261,29 +275,30 @@ export function buildQuizQuestions(words, limit, selectedQuestionTypes) {
         };
       }
 
-      if (questionType === "fill-blank") {
-        const distractors = shuffle(
-          eligibleWords
-            .filter((candidate) => candidate.id !== word.id)
-            .map((candidate) => candidate.term),
-        )
-          .filter((term, optionIndex, terms) => terms.indexOf(term) === optionIndex)
-          .slice(0, 3);
-
-        const options = shuffle([word.term, ...distractors]).slice(0, 4);
-
-        return {
-          id: word.id,
-          type: "fill-blank",
-          prompt: word.fill_blank_sentence || buildFillInBlankSentence(word.definition),
-          correctAnswer: word.term,
-          promptLanguage: "English context",
-          answerLanguage: word.language,
-          options,
-          deckName: word.deckName,
-          language: word.language,
-        };
-      }
+      // AI fill-in-the-blank is paused while we think through the OpenAI direction.
+      // if (questionType === "fill-blank") {
+      //   const distractors = shuffle(
+      //     eligibleWords
+      //       .filter((candidate) => candidate.id !== word.id)
+      //       .map((candidate) => candidate.term),
+      //   )
+      //     .filter((term, optionIndex, terms) => terms.indexOf(term) === optionIndex)
+      //     .slice(0, 3);
+      //
+      //   const options = shuffle([word.term, ...distractors]).slice(0, 4);
+      //
+      //   return {
+      //     id: word.id,
+      //     type: "fill-blank",
+      //     prompt: word.fill_blank_sentence || buildFillInBlankSentence(word.definition),
+      //     correctAnswer: word.term,
+      //     promptLanguage: "English context",
+      //     answerLanguage: word.language,
+      //     options,
+      //     deckName: word.deckName,
+      //     language: word.language,
+      //   };
+      // }
 
       const distractors = shuffle(
         eligibleWords

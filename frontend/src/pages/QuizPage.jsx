@@ -356,23 +356,24 @@ export default function QuizPage() {
         selectedStrengths.includes(word.strength || "weak"),
       );
 
-      let quizWords = filteredWords;
+      const quizWords = filteredWords;
 
-      if (selectedQuestionTypes.includes("fill-blank") && filteredWords.length > 0) {
-        const fillBlankResponse = await api.post("/lists/words/fill-blank-sentences", {
-          word_ids: filteredWords.map((word) => word.id),
-        });
-
-        const fillBlankWordsById = new Map(
-          fillBlankResponse.data.map((word) => [word.id, word.fill_blank_sentence]),
-        );
-
-        quizWords = filteredWords.map((word) => ({
-          ...word,
-          fill_blank_sentence:
-            fillBlankWordsById.get(word.id) ?? word.fill_blank_sentence ?? null,
-        }));
-      }
+      // AI fill-in-the-blank is paused while we think through the OpenAI direction.
+      // if (selectedQuestionTypes.includes("fill-blank") && filteredWords.length > 0) {
+      //   const fillBlankResponse = await api.post("/lists/words/fill-blank-sentences", {
+      //     word_ids: filteredWords.map((word) => word.id),
+      //   });
+      //
+      //   const fillBlankWordsById = new Map(
+      //     fillBlankResponse.data.map((word) => [word.id, word.fill_blank_sentence]),
+      //   );
+      //
+      //   quizWords = filteredWords.map((word) => ({
+      //     ...word,
+      //     fill_blank_sentence:
+      //       fillBlankWordsById.get(word.id) ?? word.fill_blank_sentence ?? null,
+      //   }));
+      // }
 
       const strengthLabel = selectedStrengths
         .map(
@@ -389,12 +390,12 @@ export default function QuizPage() {
 
       if (
         selectedQuestionTypes.some((questionType) =>
-          ["multiple-choice", "fill-blank"].includes(questionType),
+          ["multiple-choice"].includes(questionType),
         ) &&
         filteredWords.length < 4
       ) {
         setError(
-          `You need at least 4 ${strengthLabel} across the selected decks to include multiple-choice or fill in the blank questions.`,
+          `You need at least 4 ${strengthLabel} across the selected decks to include multiple-choice questions.`,
         );
         return;
       }
@@ -434,7 +435,7 @@ export default function QuizPage() {
     if (
       !currentQuestion ||
       submittedAnswer ||
-      !["multiple-choice", "true-false", "fill-blank"].includes(currentQuestion.type)
+      !["multiple-choice", "true-false"].includes(currentQuestion.type)
     ) {
       return;
     }
@@ -1075,8 +1076,6 @@ export default function QuizPage() {
                   ? "Translation"
                   : currentQuestion.type === "true-false"
                     ? "True / False"
-                    : currentQuestion.type === "fill-blank"
-                      ? "Fill in the blank"
                     : "Multiple choice"}
               </p>
               <h2
@@ -1095,8 +1094,6 @@ export default function QuizPage() {
                   ? `Type the ${currentQuestion.answerLanguage} translation below.`
                   : currentQuestion.type === "true-false"
                     ? `Decide whether this ${currentQuestion.answerLanguage} translation is true or false.`
-                    : currentQuestion.type === "fill-blank"
-                      ? `Choose the ${currentQuestion.answerLanguage} word or phrase that best completes the sentence.`
                   : `Choose the best ${currentQuestion.answerLanguage} translation below.`}
               </p>
             </div>

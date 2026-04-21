@@ -161,9 +161,9 @@ export default function GameHubPage() {
                   <button
                     type="button"
                     style={primaryButtonStyle}
-                    onClick={() => navigate("/games/quiz")}
+                    onClick={() => navigate(option.path)}
                   >
-                    Play quiz
+                    {option.buttonLabel}
                   </button>
                 ) : (
                   <button type="button" style={secondaryButtonStyle}>

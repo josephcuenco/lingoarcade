@@ -11,4 +11,5 @@ celery
 redis
 python-multipart
 email-validator
-openai
+# OpenAI generation is paused while we think through the AI direction.
+# openai

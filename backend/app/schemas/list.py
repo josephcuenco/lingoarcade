@@ -71,5 +71,6 @@ class RecordWordPerformanceRequest(BaseModel):
     results: list[QuizResultItem]
 
 
-class GenerateFillBlankSentencesRequest(BaseModel):
-    word_ids: list[UUID]
+# OpenAI fill-in-the-blank generation is paused while we think through the AI direction.
+# class GenerateFillBlankSentencesRequest(BaseModel):
+#     word_ids: list[UUID]

@@ -180,7 +180,7 @@
   height: 100%;
   min-height: 88px;
   transform-style: preserve-3d;
-  transition: transform 0.55s ease;
+  transition: transform 0.32s ease;
 }
 
 .auth-word-card-1 {
@@ -266,7 +266,7 @@
 
 .auth-word-term {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.25rem;
   color: #f7f8ff;
 }
 
@@ -321,6 +321,76 @@
 .auth-game-retry:focus-visible {
   outline: 2px solid rgba(118, 247, 213, 0.85);
   outline-offset: 3px;
+}
+
+.card-match-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.card-match-grid .auth-word-button {
+  min-height: 112px;
+}
+
+.card-match-grid-small {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.card-match-grid-medium {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.card-match-grid-large {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.bingo-setup-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 520px));
+  gap: 18px;
+}
+
+.bingo-option-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bingo-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.bingo-grid .auth-word-button {
+  min-height: 104px;
+}
+
+.bingo-grid-small {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bingo-grid-medium {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.bingo-grid-large {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.auth-word-card.is-bingo-correct .auth-word-front {
+  border-color: rgba(118, 247, 213, 0.8);
+  background: linear-gradient(135deg, rgba(118, 247, 213, 0.34), rgba(72, 183, 255, 0.16));
+  box-shadow:
+    0 0 0 2px rgba(118, 247, 213, 0.55),
+    0 0 28px rgba(118, 247, 213, 0.3);
+}
+
+.auth-word-card.is-bingo-wrong .auth-word-front {
+  border-color: rgba(255, 96, 146, 0.75);
+  background: linear-gradient(135deg, rgba(255, 77, 157, 0.34), rgba(255, 184, 108, 0.14));
+  box-shadow:
+    0 0 0 2px rgba(255, 96, 146, 0.5),
+    0 0 28px rgba(255, 77, 157, 0.28);
 }
 
 .auth-card {
@@ -466,6 +536,21 @@
   .auth-word-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .card-match-grid,
+  .card-match-grid-small,
+  .card-match-grid-medium,
+  .card-match-grid-large {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .bingo-setup-options {
+    grid-template-columns: 1fr;
+  }
+
+  .bingo-grid-large {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -484,5 +569,23 @@
 
   .auth-word-grid {
     grid-template-columns: 1fr;
+  }
+
+  .card-match-grid,
+  .card-match-grid-small,
+  .card-match-grid-medium,
+  .card-match-grid-large {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bingo-option-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bingo-grid,
+  .bingo-grid-small,
+  .bingo-grid-medium,
+  .bingo-grid-large {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

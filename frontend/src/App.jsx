@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import AuthProvider from "./auth/AuthProvider";
 import ProtectedRoute from "./auth/ProtectedRoute";
+import BingoPage from "./pages/BingoPage";
+import CardMatchingPage from "./pages/CardMatchingPage";
 import GameHubPage from "./pages/GameHubPage";
 import ListsPage from "./pages/ListsPage";
 import LoginPage from "./pages/LoginPage";
@@ -37,6 +39,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <QuizPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/games/card-matching"
+            element={
+              <ProtectedRoute>
+                <CardMatchingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/games/bingo"
+            element={
+              <ProtectedRoute>
+                <BingoPage />
               </ProtectedRoute>
             }
           />

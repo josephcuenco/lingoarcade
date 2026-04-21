@@ -9,12 +9,13 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.vocab_list import VocabularyList
 from app.models.vocab_word import VocabularyWord
-from app.services.fill_blank_sentences import generate_fill_blank_sentences
+# OpenAI fill-in-the-blank generation is paused while we think through the AI direction.
+# from app.services.fill_blank_sentences import generate_fill_blank_sentences
 from app.schemas.list import (
     CreateWordRequest,
     CreateListRequest,
     DeleteLanguageRequest,
-    GenerateFillBlankSentencesRequest,
+    # GenerateFillBlankSentencesRequest,
     ListResponse,
     RecordWordPerformanceRequest,
     RenameLanguageRequest,
@@ -192,41 +193,42 @@ def record_word_performance(
     return [words_by_id[result.word_id] for result in payload.results]
 
 
-@router.post("/words/fill-blank-sentences", response_model=list[WordResponse])
-def ensure_fill_blank_sentences(
-    payload: GenerateFillBlankSentencesRequest,
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    if not payload.word_ids:
-        raise HTTPException(status_code=400, detail="At least one word is required")
-
-    words = db.scalars(
-        select(VocabularyWord)
-        .join(VocabularyList, VocabularyList.id == VocabularyWord.list_id)
-        .options(selectinload(VocabularyWord.vocabulary_list))
-        .where(
-            VocabularyWord.id.in_(payload.word_ids),
-            VocabularyList.user_id == user.id,
-        )
-    ).all()
-
-    words_by_id = {word.id: word for word in words}
-    if len(words_by_id) != len(set(payload.word_ids)):
-        raise HTTPException(status_code=404, detail="One or more words were not found")
-
-    generated_sentences = generate_fill_blank_sentences(words)
-    for word in words:
-        generated_sentence = generated_sentences.get(str(word.id))
-        if generated_sentence:
-            word.fill_blank_sentence = generated_sentence
-
-    if generated_sentences:
-        db.commit()
-        for word in words:
-            db.refresh(word)
-
-    return [words_by_id[word_id] for word_id in payload.word_ids]
+# OpenAI fill-in-the-blank generation is paused while we think through the AI direction.
+# @router.post("/words/fill-blank-sentences", response_model=list[WordResponse])
+# def ensure_fill_blank_sentences(
+#     payload: GenerateFillBlankSentencesRequest,
+#     db: Session = Depends(get_db),
+#     user=Depends(get_current_user),
+# ):
+#     if not payload.word_ids:
+#         raise HTTPException(status_code=400, detail="At least one word is required")
+#
+#     words = db.scalars(
+#         select(VocabularyWord)
+#         .join(VocabularyList, VocabularyList.id == VocabularyWord.list_id)
+#         .options(selectinload(VocabularyWord.vocabulary_list))
+#         .where(
+#             VocabularyWord.id.in_(payload.word_ids),
+#             VocabularyList.user_id == user.id,
+#         )
+#     ).all()
+#
+#     words_by_id = {word.id: word for word in words}
+#     if len(words_by_id) != len(set(payload.word_ids)):
+#         raise HTTPException(status_code=404, detail="One or more words were not found")
+#
+#     generated_sentences = generate_fill_blank_sentences(words)
+#     for word in words:
+#         generated_sentence = generated_sentences.get(str(word.id))
+#         if generated_sentence:
+#             word.fill_blank_sentence = generated_sentence
+#
+#     if generated_sentences:
+#         db.commit()
+#         for word in words:
+#             db.refresh(word)
+#
+#     return [words_by_id[word_id] for word_id in payload.word_ids]
 
 
 @router.put("/{list_id}/words/{word_id}", response_model=WordResponse)
