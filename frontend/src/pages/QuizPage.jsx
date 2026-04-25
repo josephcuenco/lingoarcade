@@ -66,7 +66,6 @@ export default function QuizPage() {
   const [quizLoading, setQuizLoading] = useState(false);
   const [error, setError] = useState("");
   const [activeMode, setActiveMode] = useState("setup");
-  const [setupStep, setSetupStep] = useState(1);
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -162,6 +161,16 @@ export default function QuizPage() {
   const currentQuestion = quizQuestions[currentQuestionIndex];
   const isQuizActive = activeMode === "play";
   const isQuizComplete = activeMode === "results";
+  const isPerfectQuiz =
+    isQuizComplete && quizQuestions.length > 0 && score === quizQuestions.length;
+
+  useEffect(() => {
+    document.body.classList.toggle("gameplay-active", isQuizActive);
+
+    return () => {
+      document.body.classList.remove("gameplay-active");
+    };
+  }, [isQuizActive]);
 
   useEffect(() => {
     if (!isQuizActive || !quizStartedAt) {
@@ -249,11 +258,6 @@ export default function QuizPage() {
     quizStartedAt,
   ]);
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
-
   const handleToggleDeck = (deckId) => {
     setSelectedDeckIds((currentDeckIds) =>
       currentDeckIds.includes(deckId)
@@ -308,16 +312,6 @@ export default function QuizPage() {
     setQuizStartedAt(null);
     setElapsedSeconds(0);
     setCompletedElapsedSeconds(0);
-  };
-
-  const handleGoToOptionsStep = () => {
-    if (selectedDeckIds.length === 0) {
-      setError(chooseDeckErrorMessage);
-      return;
-    }
-
-    setError("");
-    setSetupStep(2);
   };
 
   const handleStartQuiz = async () => {
@@ -488,7 +482,6 @@ export default function QuizPage() {
   const handleResetQuiz = () => {
     resetQuizState();
     setActiveMode("setup");
-    setSetupStep(1);
     setError("");
   };
 
@@ -497,10 +490,10 @@ export default function QuizPage() {
   };
 
   return (
-    <main className="app-shell" style={{ padding: "48px 20px 64px" }}>
+    <main className="app-shell" style={{ padding: "28px 20px 64px" }}>
       <div
         style={{
-          maxWidth: "1180px",
+          maxWidth: "1320px",
           margin: "0 auto",
           display: "grid",
           gap: "24px",
@@ -517,64 +510,8 @@ export default function QuizPage() {
             gap: "18px",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "16px",
-              flexWrap: "wrap",
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                textTransform: "uppercase",
-                letterSpacing: "0.18em",
-                fontSize: "0.78rem",
-                color: "#76f7d5",
-              }}
-            >
-              LingoArcade
-            </p>
-
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={() => navigate("/games")}
-                style={secondaryButtonStyle}
-              >
-                Back to game hub
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/lists")}
-                style={secondaryButtonStyle}
-              >
-                Back to decks
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                style={secondaryButtonStyle}
-              >
-                Log out
-              </button>
-            </div>
-          </div>
-
           <div style={{ display: "grid", gap: "10px" }}>
-            <p
-              style={{
-                margin: 0,
-                color: "#76f7d5",
-                textTransform: "uppercase",
-                letterSpacing: "0.14em",
-                fontSize: "0.78rem",
-              }}
-            >
-              Quiz
-            </p>
+            
             <h1
               style={{
                 margin: 0,
@@ -589,21 +526,21 @@ export default function QuizPage() {
                 ? "Quiz in progress."
                 : isQuizComplete
                   ? "Quiz complete."
-                  : "Build your quiz session."}
+                  : "Test your knowledge."}
             </h1>
             <p
               style={{
                 margin: 0,
-                maxWidth: "58ch",
+                maxWidth: "65ch",
                 color: textMuted,
                 fontSize: "1.02rem",
               }}
             >
               {isQuizActive
-                ? "Choose the best translation for each prompt and work your way through the deck mix."
+                ? ""
                 : isQuizComplete
                   ? "Review your score and time, then jump back in with a fresh shuffle whenever you're ready."
-                  : "Choose a language, pick your decks, set the quiz mix, and we'll build a round from your words."}
+                  : "Choose a language, pick your decks, customize the questions, and we'll generate a quiz!"}
             </p>
           </div>
         </section>
@@ -656,35 +593,29 @@ export default function QuizPage() {
                   Quiz setup
                 </p>
                 <h2 style={{ margin: "8px 0 0", color: textStrong, fontSize: "1.9rem" }}>
-                  {setupStep === 1 ? "Choose your decks" : "Set up your quiz"}
+                  Customize your quiz
                 </h2>
               </div>
 
-              {setupStep === 1 ? (
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={handleSelectAllDecks}
-                    style={secondaryButtonStyle}
-                  >
-                    Select all
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClearDeckSelection}
-                    style={secondaryButtonStyle}
-                  >
-                    Clear
-                  </button>
-                </div>
-              ) : (
-                <p style={{ margin: 0, color: textMuted, fontSize: "0.92rem" }}>
-                  Step 2 of 2
-                </p>
-              )}
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={handleSelectAllDecks}
+                  style={secondaryButtonStyle}
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearDeckSelection}
+                  style={secondaryButtonStyle}
+                >
+                  Clear
+                </button>
+              </div>
             </div>
 
-            {setupStep === 1 ? loading ? (
+            {loading ? (
               <p style={{ margin: 0, color: textMuted }}>Loading your decks...</p>
             ) : lists.length === 0 ? (
               <div
@@ -710,7 +641,7 @@ export default function QuizPage() {
                       fontSize: "0.74rem",
                     }}
                   >
-                    Practice language
+                    Pick a language
                   </p>
                   <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                     {availableLanguages.map((language) => {
@@ -771,12 +702,7 @@ export default function QuizPage() {
                         No decks yet for {selectedLanguage}.
                       </div>
                     ) : (
-                      <div
-                        className="quiz-deck-grid"
-                        style={{
-                          alignItems: "stretch",
-                        }}
-                      >
+                      <div className="quiz-deck-grid" style={{ alignItems: "stretch" }}>
                         {visibleDecks.map((deck) => {
                           const isSelected = selectedDeckIds.includes(deck.id);
 
@@ -811,13 +737,7 @@ export default function QuizPage() {
                                 </p>
                               </div>
 
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: "8px",
-                                  flexWrap: "wrap",
-                                }}
-                              >
+                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                                 {["weak", "okay", "strong"].map((strength) => {
                                   const strengthStyle = strengthStyles[strength];
                                   const count = deck[`${strength}_word_count`] || 0;
@@ -859,47 +779,42 @@ export default function QuizPage() {
                   </section>
                 ) : null}
               </div>
-            ) : (
-              <section
+            )}
+
+            <section
+              className="quiz-setup-options"
                 style={{
                   borderTop: "1px solid rgba(130, 151, 255, 0.14)",
                   paddingTop: "20px",
-                  display: "grid",
-                  gap: "12px",
-                  maxWidth: "360px",
                 }}
               >
-                <label style={{ display: "grid", gap: "8px", color: textSoft }}>
-                  <span>Question count</span>
-                  <select
-                    className="game-select"
-                    value={questionCount}
-                    onChange={(event) => setQuestionCount(Number(event.target.value))}
-                    style={{
-                      appearance: "none",
-                      borderRadius: "16px",
-                      border: "1px solid rgba(130, 151, 255, 0.18)",
-                      padding: "14px 16px",
-                      background: "rgba(255,255,255,0.06)",
-                      color: textStrong,
-                      boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
-                    }}
-                  >
-                    <option value={5}>5 questions</option>
-                    <option value={10}>10 questions</option>
-                    <option value={15}>15 questions</option>
-                  </select>
+                <label className="quiz-setup-option" style={{ color: textSoft }}>
+                  <span className="quiz-setup-option-label">Question count</span>
+                  <div className="quiz-count-slider-shell">
+                    <div className="quiz-count-slider-value">
+                      <strong>{questionCount}</strong>
+                      <span>{questionCount === 1 ? "question" : "questions"}</span>
+                    </div>
+                    <input
+                      className="quiz-count-slider"
+                      type="range"
+                      min="5"
+                      max="20"
+                      step="1"
+                      value={questionCount}
+                      onChange={(event) => setQuestionCount(Number(event.target.value))}
+                      aria-label="Question count"
+                    />
+                    <div className="quiz-count-slider-labels" aria-hidden="true">
+                      <span>5</span>
+                      <span>20</span>
+                    </div>
+                  </div>
                 </label>
 
-                <div style={{ display: "grid", gap: "8px", color: textSoft }}>
-                  <span>Word strength</span>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                      gap: "10px",
-                    }}
-                  >
+                <div className="quiz-setup-option" style={{ color: textSoft }}>
+                  <span className="quiz-setup-option-label">Word strength</span>
+                  <div className="bingo-option-grid quiz-inline-option-grid">
                     {strengthOptions.map((option) => {
                       const isActive = selectedStrengths.includes(option.value);
 
@@ -911,7 +826,7 @@ export default function QuizPage() {
                           style={{
                             width: "100%",
                             borderRadius: "999px",
-                            padding: "11px 16px",
+                            padding: "14px 16px",
                             border: isActive
                               ? "1px solid rgba(118, 247, 213, 0.42)"
                               : "1px solid rgba(130, 151, 255, 0.18)",
@@ -937,9 +852,9 @@ export default function QuizPage() {
                   ) : null}
                 </div>
 
-                <div style={{ display: "grid", gap: "8px", color: textSoft }}>
-                  <span>Question format</span>
-                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <div className="quiz-setup-option" style={{ color: textSoft }}>
+                  <span className="quiz-setup-option-label">Question format</span>
+                  <div className="bingo-option-grid quiz-inline-option-grid">
                     {questionTypeOptions.map((option) => {
                       const isActive = selectedQuestionTypes.includes(option.value);
 
@@ -950,7 +865,7 @@ export default function QuizPage() {
                           onClick={() => handleToggleQuestionType(option.value)}
                           style={{
                             borderRadius: "999px",
-                            padding: "11px 16px",
+                            padding: "14px 16px",
                             border: isActive
                               ? "1px solid rgba(118, 247, 213, 0.42)"
                               : "1px solid rgba(130, 151, 255, 0.18)",
@@ -975,44 +890,30 @@ export default function QuizPage() {
                     </p>
                   ) : null}
                 </div>
-              </section>
-            )}
+            </section>
 
-            {setupStep === 1 && error === chooseDeckErrorMessage ? (
+            {error === chooseDeckErrorMessage ? (
               <p style={{ margin: "0 0 -8px", color: "#ffb6d7", fontSize: "0.92rem" }}>
                 {chooseDeckErrorMessage}
               </p>
             ) : null}
 
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              {setupStep === 1 ? (
-                <button
-                  type="button"
-                  onClick={handleGoToOptionsStep}
-                  style={primaryButtonStyle}
-                  disabled={loading || lists.length === 0}
-                >
-                  Next
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setSetupStep(1)}
-                    style={secondaryButtonStyle}
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleStartQuiz}
-                    style={primaryButtonStyle}
-                    disabled={quizLoading || loading || lists.length === 0}
-                  >
-                    {quizLoading ? "Building quiz..." : "Start quiz"}
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                onClick={handleStartQuiz}
+                style={primaryButtonStyle}
+                disabled={quizLoading || loading || lists.length === 0}
+              >
+                {quizLoading ? "Building quiz..." : "Start quiz"}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/play")}
+                style={secondaryButtonStyle}
+              >
+                Back to games
+              </button>
             </div>
           </section>
         ) : null}
@@ -1094,7 +995,7 @@ export default function QuizPage() {
                   ? `Type the ${currentQuestion.answerLanguage} translation below.`
                   : currentQuestion.type === "true-false"
                     ? `Decide whether this ${currentQuestion.answerLanguage} translation is true or false.`
-                  : `Choose the best ${currentQuestion.answerLanguage} translation below.`}
+                  : `Choose the ${currentQuestion.answerLanguage} translation below.`}
               </p>
             </div>
 
@@ -1303,6 +1204,40 @@ export default function QuizPage() {
               </p>
             </div>
 
+            {isPerfectQuiz ? (
+              <div
+                style={{
+                  border: "1px solid rgba(118, 247, 213, 0.42)",
+                  borderRadius: "24px",
+                  padding: "18px 20px",
+                  background:
+                    "linear-gradient(135deg, rgba(118, 247, 213, 0.16), rgba(72, 183, 255, 0.12), rgba(255, 77, 157, 0.12))",
+                  boxShadow:
+                    "0 0 0 1px rgba(118, 247, 213, 0.08), 0 0 34px rgba(255, 77, 157, 0.16)",
+                  display: "grid",
+                  gap: "6px",
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#76f7d5",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.14em",
+                    fontSize: "0.78rem",
+                  }}
+                >
+                  Perfect run
+                </p>
+                <h3 style={{ margin: 0, color: textStrong, fontSize: "1.45rem" }}>
+                  Flawless vocabulary streak.
+                </h3>
+                <p style={{ margin: 0, color: textMuted }}>
+                  100% accuracy. Every word landed exactly where it needed to.
+                </p>
+              </div>
+            ) : null}
+
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <button
                 type="button"
@@ -1323,7 +1258,7 @@ export default function QuizPage() {
                   resetQuizState();
                   setActiveMode("setup");
                   setError("");
-                  navigate("/games");
+                  navigate("/play");
                 }}
                 style={secondaryButtonStyle}
               >

@@ -29,33 +29,27 @@ export const secondaryButtonStyle = {
 
 export const gameOptions = [
   {
-    name: "Quiz",
-    accent: "#76f7d5",
-    description: "Quick recall rounds with prompts and answers pulled from your decks.",
-    status: "available",
-    path: "/games/quiz",
-    buttonLabel: "Play quiz",
-  },
-  {
     name: "Card Matching",
     accent: "#ff79c6",
     description: "Flip cards, find each word and translation pair, and race your best time.",
     status: "available",
-    path: "/games/card-matching",
+    path: "/play/card-matching",
     buttonLabel: "Play matching",
   },
   {
     name: "Word Search",
     accent: "#48b7ff",
     description: "Find hidden vocabulary terms in a puzzle grid built from your study words.",
-    status: "coming-soon",
+    status: "available",
+    path: "/play/word-search",
+    buttonLabel: "Play word search",
   },
   {
-    name: "Bingo",
+    name: "BingoBlitz",
     accent: "#ffb86c",
     description: "Race the timer as prompts appear and you find each translation on the board.",
     status: "available",
-    path: "/games/bingo",
+    path: "/play/bingo",
     buttonLabel: "Play bingo",
   },
   {
@@ -111,7 +105,7 @@ export const strengthStyles = {
 
 export function formatLastPlayed(lastPracticedAt) {
   if (!lastPracticedAt) {
-    return "Not played yet";
+    return "Not practiced yet";
   }
 
   const practicedDate = new Date(lastPracticedAt);
@@ -124,14 +118,14 @@ export function formatLastPlayed(lastPracticedAt) {
   );
 
   if (dayDifference <= 0) {
-    return "Played today";
+    return "Practiced today";
   }
 
   if (dayDifference === 1) {
-    return "Played yesterday";
+    return "Practiced yesterday";
   }
 
-  return `Played ${dayDifference} days ago`;
+  return `Practiced ${dayDifference} days ago`;
 }
 
 export function shuffle(items) {

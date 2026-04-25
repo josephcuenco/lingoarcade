@@ -148,8 +148,9 @@ export default function AuthLayout({
       <section className="auth-hero">
         <h1 className="auth-mark">LingoArcade</h1>
         <p className="auth-blurb">
-          Build vocabulary decks and practice your language skills. Can you
-          beat your high score?
+          Learning vocabulary made fun!
+          <br />
+          Can you match all the cards in 20 seconds or less?
         </p>
         <div className="auth-word-stage">
           <div className="auth-orbit auth-orbit-one" />

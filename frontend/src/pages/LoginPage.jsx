@@ -17,7 +17,7 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      navigate("/lists");
+      navigate("/build");
     } catch (err) {
       setError(err.response?.data?.detail || "Login failed");
     }

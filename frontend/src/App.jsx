@@ -2,13 +2,15 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import AuthProvider from "./auth/AuthProvider";
 import ProtectedRoute from "./auth/ProtectedRoute";
+import AppLayout from "./components/AppLayout";
 import BingoPage from "./pages/BingoPage";
+import BuildPage from "./pages/BuildPage";
 import CardMatchingPage from "./pages/CardMatchingPage";
 import GameHubPage from "./pages/GameHubPage";
-import ListsPage from "./pages/ListsPage";
 import LoginPage from "./pages/LoginPage";
 import QuizPage from "./pages/QuizPage";
 import RegisterPage from "./pages/RegisterPage";
+import WordSearchPage from "./pages/WordSearchPage";
 
 export default function App() {
   return (
@@ -19,44 +21,30 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route
-            path="/lists"
             element={
               <ProtectedRoute>
-                <ListsPage />
+                <AppLayout />
               </ProtectedRoute>
             }
-          />
-          <Route
-            path="/games"
-            element={
-              <ProtectedRoute>
-                <GameHubPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/games/quiz"
-            element={
-              <ProtectedRoute>
-                <QuizPage />
-              </ProtectedRoute>
-            }
-          />
+          >
+            <Route path="/build" element={<BuildPage />} />
+            <Route path="/quiz" element={<QuizPage />} />
+            <Route path="/play" element={<GameHubPage />} />
+            <Route path="/play/card-matching" element={<CardMatchingPage />} />
+            <Route path="/play/bingo" element={<BingoPage />} />
+            <Route path="/play/word-search" element={<WordSearchPage />} />
+          </Route>
+          <Route path="/lists" element={<Navigate to="/build" replace />} />
+          <Route path="/games" element={<Navigate to="/play" replace />} />
+          <Route path="/games/quiz" element={<Navigate to="/quiz" replace />} />
           <Route
             path="/games/card-matching"
-            element={
-              <ProtectedRoute>
-                <CardMatchingPage />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/play/card-matching" replace />}
           />
+          <Route path="/games/bingo" element={<Navigate to="/play/bingo" replace />} />
           <Route
-            path="/games/bingo"
-            element={
-              <ProtectedRoute>
-                <BingoPage />
-              </ProtectedRoute>
-            }
+            path="/games/word-search"
+            element={<Navigate to="/play/word-search" replace />}
           />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

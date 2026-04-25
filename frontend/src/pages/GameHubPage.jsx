@@ -1,5 +1,4 @@
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/useAuth";
 import {
   gameOptions,
   panelBackground,
@@ -13,18 +12,12 @@ import {
 
 export default function GameHubPage() {
   const navigate = useNavigate();
-  const { logout } = useAuth();
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
 
   return (
-    <main className="app-shell" style={{ padding: "48px 20px 64px" }}>
+    <main className="app-shell" style={{ padding: "28px 20px 64px" }}>
       <div
         style={{
-          maxWidth: "1180px",
+          maxWidth: "1320px",
           margin: "0 auto",
           display: "grid",
           gap: "24px",
@@ -41,57 +34,8 @@ export default function GameHubPage() {
             gap: "18px",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "16px",
-              flexWrap: "wrap",
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                textTransform: "uppercase",
-                letterSpacing: "0.18em",
-                fontSize: "0.78rem",
-                color: "#76f7d5",
-              }}
-            >
-              LingoArcade
-            </p>
-
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={() => navigate("/lists")}
-                style={secondaryButtonStyle}
-              >
-                Back to decks
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                style={secondaryButtonStyle}
-              >
-                Log out
-              </button>
-            </div>
-          </div>
-
           <div style={{ display: "grid", gap: "10px" }}>
-            <p
-              style={{
-                margin: 0,
-                color: "#76f7d5",
-                textTransform: "uppercase",
-                letterSpacing: "0.14em",
-                fontSize: "0.78rem",
-              }}
-            >
-              Game hub
-            </p>
+            
             <h1
               style={{
                 margin: 0,
@@ -102,18 +46,17 @@ export default function GameHubPage() {
                   "0 0 24px rgba(81, 183, 255, 0.18), 0 0 60px rgba(255, 72, 176, 0.14)",
               }}
             >
-              Pick how you want to practice.
+              Practice by playing games.
             </h1>
             <p
               style={{
-                margin: 0,
+                margin: "8px 0 0",
                 maxWidth: "58ch",
                 color: textMuted,
                 fontSize: "1.02rem",
               }}
             >
-              Quiz is ready to play now, and the other formats are staged for the
-              next rounds of development.
+              Have fun while learning vocabulary and improving your gaming skills.
             </p>
           </div>
         </section>

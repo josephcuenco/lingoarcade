@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../auth/useAuth";
+import { formatLastPlayed } from "./gameShared";
 
 const emptyDeckForm = {
   name: "",
@@ -169,7 +170,7 @@ const handleDeckWordScroll = (event) => {
   event.currentTarget.scrollTop += event.deltaY * 0.10;
 };
 
-export default function ListsPage() {
+export default function BuildPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [lists, setLists] = useState([]);
@@ -905,25 +906,16 @@ export default function ListsPage() {
     setError("");
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
-
-  const handleOpenGames = () => {
-    navigate("/games");
-  };
-
   return (
     <main
       className="app-shell"
       style={{
-        padding: "48px 20px 64px",
+        padding: "28px 20px 64px",
       }}
     >
       <div
         style={{
-          maxWidth: "1100px",
+          maxWidth: "1280px",
           margin: "0 auto",
           display: "grid",
           gap: "24px",
@@ -945,48 +937,9 @@ export default function ListsPage() {
           }}
         >
           <div style={{ width: "100%" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "16px",
-                flexWrap: "wrap",
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.18em",
-                  fontSize: "0.78rem",
-                  color: "#76f7d5",
-                }}
-              >
-                LingoArcade
-              </p>
-
-              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={handleOpenGames}
-                  style={primaryButtonStyle}
-                >
-                  Game on!
-                </button>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  style={secondaryButtonStyle}
-                >
-                  Log out
-                </button>
-              </div>
-            </div>
-
             <h1
               style={{
-                margin: "8px 0 10px",
+                margin: "0 0 10px",
                 fontSize: "clamp(2.3rem, 6vw, 4.5rem)",
                 lineHeight: 0.95,
                 color: textStrong,
@@ -996,17 +949,7 @@ export default function ListsPage() {
             >
               Build your language decks.
             </h1>
-            <p
-                style={{
-                  margin: 0,
-                  maxWidth: "54ch",
-                  color: textMuted,
-                  fontSize: "1.05rem",
-                }}
-              >
-              Switch between languages to organize your decks, then open a deck to
-              start adding words and definitions.
-            </p>
+            
             <div
               style={{
                 display: "grid",
@@ -1105,9 +1048,28 @@ export default function ListsPage() {
                 <p style={{ margin: 0, color: "#76f7d5", fontSize: "0.9rem" }}>
                   {activeLanguage ? `${activeLanguage} collection` : "Your collection"}
                 </p>
-                <h2 style={{ margin: "6px 0 0", fontSize: "1.9rem", color: textStrong }}>
-                  Vocabulary decks
-                </h2>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    marginTop: "6px",
+                  }}
+                >
+                  <h2 style={{ margin: 0, fontSize: "1.9rem", color: textStrong }}>
+                    Vocabulary decks
+                  </h2>
+                  <span
+                    className="deck-info-tooltip"
+                    aria-label="Word strength and accuracy are stored from quiz results."
+                    tabIndex={0}
+                  >
+                    i
+                    <span className="deck-info-tooltip-text" role="tooltip">
+                      Each word has a strength and accuracy score determined by your quiz results.
+                    </span>
+                  </span>
+                </div>
               </div>
               <div
                 style={{
@@ -1242,6 +1204,7 @@ export default function ListsPage() {
                           >
                             {deckWordCount} {deckWordCount === 1 ? "word" : "words"}
                           </p>
+                          
                           {deckWordCount > 0 ? (
                             <div
                               style={{
@@ -1272,11 +1235,25 @@ export default function ListsPage() {
                                     <strong style={{ color: textStrong }}>
                                       {strengthCounts[strength]}
                                     </strong>
+
+                                    
                                   </span>
+                                  
                                 );
+                                
                               })}
                             </div>
+                            
                           ) : null}
+                          <p
+                            style={{
+                              margin: "5px 0 0",
+                              color: textSoft,
+                              fontSize: "0.86rem",
+                            }}
+                          >
+                            {formatLastPlayed(list.last_practiced_at)}
+                          </p>
                         </div>
 
                         <div
@@ -1448,7 +1425,7 @@ export default function ListsPage() {
                                   Word progress
                                 </p>
                                 <p style={{ margin: 0, color: textMuted, fontSize: "0.92rem" }}>
-                                  Track which words need more quiz time.
+                                  Track which words need more practice.
                                 </p>
                               </div>
                               <div

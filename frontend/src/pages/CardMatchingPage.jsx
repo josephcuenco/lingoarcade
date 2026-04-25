@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../auth/useAuth";
@@ -19,9 +19,9 @@ import {
 } from "./gameShared";
 
 const gameSizes = [
-  { value: "small", label: "Small", pairCount: 6 },
-  { value: "medium", label: "Medium", pairCount: 10 },
-  { value: "large", label: "Large", pairCount: 15 },
+  { value: "small", label: "Small", pairCount: 6, challengeSeconds: 15 },
+  { value: "medium", label: "Medium", pairCount: 10, challengeSeconds: 40 },
+  { value: "large", label: "Large", pairCount: 15, challengeSeconds: 60 },
 ];
 
 const getDefaultLanguageFromLists = (lists) => {
@@ -98,17 +98,17 @@ export default function CardMatchingPage() {
   const [gameStartedAt, setGameStartedAt] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [completedElapsedSeconds, setCompletedElapsedSeconds] = useState(0);
+  const gameBoardRef = useRef(null);
+  const resultsRef = useRef(null);
 
   const selectedGameSize =
     gameSizes.find((gameSize) => gameSize.value === selectedSize) || gameSizes[0];
+  const challengeText = `Bonus challenge: Can you complete the board in ${selectedGameSize.challengeSeconds} seconds or less?`;
   const isGameActive = activeMode === "play";
   const isGameComplete = activeMode === "results";
+  const didBeatBonusChallenge =
+    isGameComplete && completedElapsedSeconds <= selectedGameSize.challengeSeconds;
   const isComplete = cards.length > 0 && matchedIds.length === cards.length;
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
 
   const loadLists = useEffectEvent(async ({ silent = false } = {}) => {
     if (!silent) {
@@ -201,6 +201,40 @@ export default function CardMatchingPage() {
       window.clearInterval(intervalId);
     };
   }, [gameStartedAt, isComplete, isGameActive]);
+
+  useEffect(() => {
+    document.body.classList.toggle("gameplay-active", isGameActive);
+
+    return () => {
+      document.body.classList.remove("gameplay-active");
+    };
+  }, [isGameActive]);
+
+  useEffect(() => {
+    if (!isGameActive) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      gameBoardRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, [isGameActive, selectedSize]);
+
+  useEffect(() => {
+    if (!isGameComplete) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      resultsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, [isGameComplete]);
 
   useEffect(() => {
     if (!isComplete || activeMode !== "play") {
@@ -376,10 +410,10 @@ export default function CardMatchingPage() {
   };
 
   return (
-    <main className="app-shell" style={{ padding: "48px 20px 64px" }}>
+    <main className="app-shell" style={{ padding: "28px 20px 64px" }}>
       <div
         style={{
-          maxWidth: "1180px",
+          maxWidth: "1320px",
           margin: "0 auto",
           display: "grid",
           gap: "24px",
@@ -396,48 +430,6 @@ export default function CardMatchingPage() {
             gap: "18px",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "16px",
-              flexWrap: "wrap",
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                textTransform: "uppercase",
-                letterSpacing: "0.18em",
-                fontSize: "0.78rem",
-                color: "#76f7d5",
-              }}
-            >
-              LingoArcade
-            </p>
-
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={() => navigate("/games")}
-                style={secondaryButtonStyle}
-              >
-                Back to game hub
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/lists")}
-                style={secondaryButtonStyle}
-              >
-                Back to decks
-              </button>
-              <button type="button" onClick={handleLogout} style={secondaryButtonStyle}>
-                Log out
-              </button>
-            </div>
-          </div>
-
           <div style={{ display: "grid", gap: "10px" }}>
             <p
               style={{
@@ -464,7 +456,7 @@ export default function CardMatchingPage() {
                 ? "Find every pair."
                 : isGameComplete
                   ? "Matching complete."
-                  : "Build a matching round."}
+                  : "Create a matching round."}
             </h1>
             <p
               style={{
@@ -474,8 +466,11 @@ export default function CardMatchingPage() {
                 fontSize: "1.02rem",
               }}
             >
-              Pick a language, choose one or more decks, then match each word with its
-              English translation as quickly as you can.
+              {isGameActive
+              ? ""
+              : isGameComplete
+                ? ""
+                : "Pick a language, choose one or more decks, then match each word with its English translation as quickly as you can."}
             </p>
           </div>
         </section>
@@ -702,7 +697,8 @@ export default function CardMatchingPage() {
                   )}
                 </section>
 
-                <section style={{ display: "grid", gap: "12px", maxWidth: "520px" }}>
+                <section className="bingo-setup-options">
+                  <div style={{ display: "grid", gap: "12px" }}>
                   <p
                     style={{
                       margin: 0,
@@ -714,13 +710,7 @@ export default function CardMatchingPage() {
                   >
                     Game size
                   </p>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                      gap: "10px",
-                    }}
-                  >
+                  <div className="bingo-option-grid">
                     {gameSizes.map((gameSize) => {
                       const isSelected = selectedSize === gameSize.value;
 
@@ -751,13 +741,14 @@ export default function CardMatchingPage() {
                           <span style={{ color: textMuted, fontSize: "0.8rem" }}>
                             {gameSize.pairCount} pairs
                           </span>
+                          
                         </button>
                       );
                     })}
                   </div>
-                </section>
+                  </div>
 
-                <section style={{ display: "grid", gap: "12px", maxWidth: "520px" }}>
+                  <div style={{ display: "grid", gap: "12px" }}>
                   <p
                     style={{
                       margin: 0,
@@ -769,13 +760,7 @@ export default function CardMatchingPage() {
                   >
                     Word strength
                   </p>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                      gap: "10px",
-                    }}
-                  >
+                  <div className="bingo-option-grid">
                     {strengthOptions.map((option) => {
                       const isActive = selectedStrengths.includes(option.value);
 
@@ -811,6 +796,7 @@ export default function CardMatchingPage() {
                       Choose at least one word strength to build the game.
                     </p>
                   ) : null}
+                  </div>
                 </section>
               </div>
             )}
@@ -830,12 +816,20 @@ export default function CardMatchingPage() {
               >
                 {gameLoading ? "Building game..." : "Start matching"}
               </button>
+              <button
+                type="button"
+                onClick={() => navigate("/play")}
+                style={secondaryButtonStyle}
+              >
+                Back to games
+              </button>
             </div>
           </section>
         ) : null}
 
-        {isGameActive ? (
+        {isGameActive || isGameComplete ? (
           <section
+            ref={gameBoardRef}
             style={{
               background: panelBackground,
               border: panelBorder,
@@ -856,7 +850,12 @@ export default function CardMatchingPage() {
               }}
             >
               <p style={{ margin: 0, color: "#76f7d5" }}>
-                {matchedIds.length / 2} of {cards.length / 2} pairs matched
+                {isGameComplete
+                  ? "Board complete"
+                  : `${matchedIds.length / 2} of ${cards.length / 2} pairs matched`}
+              </p>
+              <p style={{ margin: 0, color: textStrong, fontSize: "0.95rem" }}>
+                {challengeText}
               </p>
               <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
                 <p style={{ margin: 0, color: textMuted }}>Flips: {flipCount}</p>
@@ -878,6 +877,7 @@ export default function CardMatchingPage() {
                     type="button"
                     className={`auth-word-button auth-word-card-${(index % 4) + 1}`}
                     onClick={() => handleCardClick(card.id)}
+                    disabled={isGameComplete}
                   >
                     <span
                       className={`auth-word-card ${isFlipped ? "is-flipped" : ""} ${
@@ -898,15 +898,18 @@ export default function CardMatchingPage() {
             </div>
 
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              <button type="button" onClick={handleResetToSetup} style={secondaryButtonStyle}>
-                Back to setup
-              </button>
+              {!isGameComplete ? (
+                <button type="button" onClick={handleResetToSetup} style={secondaryButtonStyle}>
+                  Back to setup
+                </button>
+              ) : null}
             </div>
           </section>
         ) : null}
 
         {isGameComplete ? (
           <section
+            ref={resultsRef}
             style={{
               background: panelBackground,
               border: panelBorder,
@@ -930,13 +933,48 @@ export default function CardMatchingPage() {
                 Game results
               </p>
               <h2 style={{ margin: 0, color: textStrong, fontSize: "2rem" }}>
-                You matched {cards.length / 2} pairs
+                You matched all {cards.length / 2} pairs!
               </h2>
               <p style={{ margin: 0, color: textMuted }}>Flips: {flipCount}</p>
               <p style={{ margin: 0, color: textMuted }}>
                 Time: {formatElapsedTime(completedElapsedSeconds)}
               </p>
             </div>
+
+            {didBeatBonusChallenge ? (
+              <div
+                style={{
+                  border: "1px solid rgba(118, 247, 213, 0.42)",
+                  borderRadius: "24px",
+                  padding: "18px 20px",
+                  background:
+                    "linear-gradient(135deg, rgba(118, 247, 213, 0.16), rgba(72, 183, 255, 0.12), rgba(255, 77, 157, 0.1))",
+                  boxShadow:
+                    "0 0 0 1px rgba(118, 247, 213, 0.08), 0 0 34px rgba(118, 247, 213, 0.16)",
+                  display: "grid",
+                  gap: "6px",
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#76f7d5",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.14em",
+                    fontSize: "0.78rem",
+                  }}
+                >
+                  Bonus challenge cleared
+                </p>
+                <h3 style={{ margin: 0, color: textStrong, fontSize: "1.45rem" }}>
+                  Neon speedrun mode: unlocked.
+                </h3>
+                <p style={{ margin: 0, color: textMuted }}>
+                  You beat the {selectedGameSize.challengeSeconds}-second target with time
+                  to spare. That deck never saw you coming.
+                </p>
+              </div>
+            ) : null}
 
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <button type="button" onClick={handlePlayAgain} style={primaryButtonStyle}>
@@ -947,7 +985,7 @@ export default function CardMatchingPage() {
               </button>
               <button
                 type="button"
-                onClick={() => navigate("/games")}
+                onClick={() => navigate("/play")}
                 style={secondaryButtonStyle}
               >
                 Back to game hub
