@@ -19,9 +19,9 @@ import {
 } from "./gameShared";
 
 const gameSizes = [
-  { value: "small", label: "Small", gridSize: 10, wordCount: 6, bonusSeconds: 40 },
-  { value: "medium", label: "Medium", gridSize: 12, wordCount: 10, bonusSeconds: 80 },
-  { value: "large", label: "Large", gridSize: 14, wordCount: 14, bonusSeconds: 120 },
+  { value: "small", label: "Small", gridSize: 11, wordCount: 6 },
+  { value: "medium", label: "Medium", gridSize: 13, wordCount: 10 },
+  { value: "large", label: "Large", gridSize: 15, wordCount: 14 },
 ];
 
 const gameDirections = [
@@ -33,25 +33,10 @@ const gameDirections = [
     value: "language-to-english",
     label: (language) => `${language || "Language"} -> English`,
   },
-  {
-    value: "both",
-    label: "Both",
-  },
+  { value: "both", label: "Both" },
 ];
 
-const directions = [
-  { row: 0, col: 1 },
-  { row: 1, col: 0 },
-  { row: 1, col: 1 },
-  { row: -1, col: 1 },
-  { row: 0, col: -1 },
-  { row: -1, col: 0 },
-  { row: -1, col: -1 },
-  { row: 1, col: -1 },
-];
-
-const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const notEnoughSearchableWordsPrefix = "You need at least";
+const notEnoughCrosswordWordsPrefix = "You need at least";
 
 const normalizeForGrid = (value) =>
   value
@@ -59,6 +44,8 @@ const normalizeForGrid = (value) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
     .replace(/[^A-Z]/g, "");
+
+const cellKey = (row, col) => `${row}-${col}`;
 
 const getDefaultLanguageFromLists = (lists) => {
   if (!lists.length) {
@@ -85,75 +72,7 @@ const getDefaultLanguageFromLists = (lists) => {
   return mostRecentlyCreatedDeck?.language || "";
 };
 
-const createEmptyGrid = (size) =>
-  Array.from({ length: size }, () => Array.from({ length: size }, () => ""));
-
-const getLineCells = (start, end) => {
-  const rowDifference = end.row - start.row;
-  const colDifference = end.col - start.col;
-  const rowStep = Math.sign(rowDifference);
-  const colStep = Math.sign(colDifference);
-  const rowDistance = Math.abs(rowDifference);
-  const colDistance = Math.abs(colDifference);
-
-  if (
-    !(
-      rowDistance === 0 ||
-      colDistance === 0 ||
-      rowDistance === colDistance
-    )
-  ) {
-    return [];
-  }
-
-  const length = Math.max(rowDistance, colDistance) + 1;
-  return Array.from({ length }, (_, index) => ({
-    row: start.row + rowStep * index,
-    col: start.col + colStep * index,
-  }));
-};
-
-const cellKey = (cell) => `${cell.row}-${cell.col}`;
-
-const placeWord = (grid, word) => {
-  const size = grid.length;
-  const attempts = 220;
-
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const direction = shuffle(directions)[0];
-    const row = Math.floor(Math.random() * size);
-    const col = Math.floor(Math.random() * size);
-    const endRow = row + direction.row * (word.length - 1);
-    const endCol = col + direction.col * (word.length - 1);
-
-    if (endRow < 0 || endRow >= size || endCol < 0 || endCol >= size) {
-      continue;
-    }
-
-    const cells = Array.from({ length: word.length }, (_, index) => ({
-      row: row + direction.row * index,
-      col: col + direction.col * index,
-    }));
-    const canPlace = cells.every((cell, index) => {
-      const currentValue = grid[cell.row][cell.col];
-      return !currentValue || currentValue === word[index];
-    });
-
-    if (!canPlace) {
-      continue;
-    }
-
-    cells.forEach((cell, index) => {
-      grid[cell.row][cell.col] = word[index];
-    });
-
-    return cells;
-  }
-
-  return null;
-};
-
-const getWordSearchDirection = (selectedDirection) => {
+const getCrosswordDirection = (selectedDirection) => {
   if (selectedDirection !== "both") {
     return selectedDirection;
   }
@@ -161,71 +80,211 @@ const getWordSearchDirection = (selectedDirection) => {
   return Math.random() >= 0.5 ? "english-to-language" : "language-to-english";
 };
 
-const buildWordSearch = (
+const createEmptyGrid = (size) =>
+  Array.from({ length: size }, () => Array.from({ length: size }, () => null));
+
+const getEntryCells = (entry) =>
+  Array.from({ length: entry.answer.length }, (_, index) => ({
+    row: entry.row + (entry.orientation === "down" ? index : 0),
+    col: entry.col + (entry.orientation === "across" ? index : 0),
+  }));
+
+const canPlaceEntry = (grid, answer, row, col, orientation, shouldIntersect) => {
+  const size = grid.length;
+  let intersections = 0;
+
+  for (let index = 0; index < answer.length; index += 1) {
+    const nextRow = row + (orientation === "down" ? index : 0);
+    const nextCol = col + (orientation === "across" ? index : 0);
+
+    if (nextRow < 0 || nextRow >= size || nextCol < 0 || nextCol >= size) {
+      return false;
+    }
+
+    const currentCell = grid[nextRow][nextCol];
+    if (currentCell && currentCell.letter !== answer[index]) {
+      return false;
+    }
+
+    if (currentCell?.letter === answer[index]) {
+      intersections += 1;
+    }
+  }
+
+  if (shouldIntersect && intersections === 0) {
+    return false;
+  }
+
+  const beforeRow = row - (orientation === "down" ? 1 : 0);
+  const beforeCol = col - (orientation === "across" ? 1 : 0);
+  const afterRow = row + (orientation === "down" ? answer.length : 0);
+  const afterCol = col + (orientation === "across" ? answer.length : 0);
+
+  if (grid[beforeRow]?.[beforeCol] || grid[afterRow]?.[afterCol]) {
+    return false;
+  }
+
+  return true;
+};
+
+const placeEntry = (grid, entry) => {
+  getEntryCells(entry).forEach((cell, index) => {
+    const currentCell = grid[cell.row][cell.col] || {
+      letter: entry.answer[index],
+      entryIds: [],
+    };
+
+    grid[cell.row][cell.col] = {
+      ...currentCell,
+      letter: entry.answer[index],
+      entryIds: [...new Set([...currentCell.entryIds, entry.id])],
+    };
+  });
+};
+
+const findPlacement = (grid, answer, placedEntries) => {
+  if (placedEntries.length === 0) {
+    const row = Math.floor(grid.length / 2);
+    const col = Math.max(0, Math.floor((grid.length - answer.length) / 2));
+    return { row, col, orientation: "across" };
+  }
+
+  const placements = [];
+
+  placedEntries.forEach((placedEntry) => {
+    getEntryCells(placedEntry).forEach((cell, placedIndex) => {
+      answer.split("").forEach((letter, answerIndex) => {
+        if (letter !== placedEntry.answer[placedIndex]) {
+          return;
+        }
+
+        const orientation = placedEntry.orientation === "across" ? "down" : "across";
+        const row = cell.row - (orientation === "down" ? answerIndex : 0);
+        const col = cell.col - (orientation === "across" ? answerIndex : 0);
+
+        if (canPlaceEntry(grid, answer, row, col, orientation, true)) {
+          placements.push({ row, col, orientation });
+        }
+      });
+    });
+  });
+
+  if (placements.length > 0) {
+    return shuffle(placements)[0];
+  }
+
+  return null;
+};
+
+const findFallbackPlacement = (grid, answer) => {
+  const placementOptions = shuffle(
+    ["across", "down"].flatMap((orientation) =>
+      Array.from({ length: grid.length }, (_, row) =>
+        Array.from({ length: grid.length }, (_, col) => ({
+          row,
+          col,
+          orientation,
+        })),
+      ).flat(),
+    ),
+  );
+
+  for (const placement of placementOptions) {
+    if (
+      canPlaceEntry(
+        grid,
+        answer,
+        placement.row,
+        placement.col,
+        placement.orientation,
+        false,
+      )
+    ) {
+      return placement;
+    }
+  }
+
+  return null;
+};
+
+const buildCrossword = (
   words,
   gameSize,
   selectedDirection,
   recentWordIds = new Set(),
 ) => {
   const grid = createEmptyGrid(gameSize.gridSize);
-  const placedWords = [];
+  const entries = [];
+  const numberByStartCell = {};
   const candidates = shuffle(words)
     .map((word) => {
-      const direction = getWordSearchDirection(selectedDirection);
+      const direction = getCrosswordDirection(selectedDirection);
       const clueText =
         direction === "english-to-language" ? word.definition : word.term;
-      const hiddenText =
+      const answerText =
         direction === "english-to-language" ? word.term : word.definition;
 
       return {
         id: word.id,
-        term: word.term,
-        definition: word.definition,
         clueText,
-        hiddenText,
+        answerText,
+        answer: normalizeForGrid(answerText),
         direction,
-        gridWord: normalizeForGrid(hiddenText),
         wasRecentlyUsed: recentWordIds.has(word.id),
       };
     })
     .filter(
       (word, index, allWords) =>
-        word.gridWord.length >= 3 &&
-        word.gridWord.length <= gameSize.gridSize &&
-        allWords.findIndex((candidate) => candidate.gridWord === word.gridWord) === index,
+        word.answer.length >= 3 &&
+        word.answer.length <= gameSize.gridSize &&
+        allWords.findIndex((candidate) => candidate.answer === word.answer) === index,
     )
     .sort((left, right) => {
       if (left.wasRecentlyUsed !== right.wasRecentlyUsed) {
         return left.wasRecentlyUsed ? 1 : -1;
       }
 
-      return right.gridWord.length - left.gridWord.length;
+      return right.answer.length - left.answer.length;
     });
 
   for (const word of candidates) {
-    if (placedWords.length >= gameSize.wordCount) {
+    if (entries.length >= gameSize.wordCount) {
       break;
     }
 
-    const cells = placeWord(grid, word.gridWord);
+    const placement =
+      entries.length === 0
+        ? findFallbackPlacement(grid, word.answer)
+        : findPlacement(grid, word.answer, entries);
 
-    if (cells) {
-      placedWords.push({ ...word, cells });
+    if (!placement) {
+      continue;
     }
+
+    const startKey = cellKey(placement.row, placement.col);
+    const entryNumber =
+      numberByStartCell[startKey] || Object.keys(numberByStartCell).length + 1;
+    numberByStartCell[startKey] = entryNumber;
+
+    const entry = {
+      ...word,
+      ...placement,
+      number: entryNumber,
+    };
+
+    placeEntry(grid, entry);
+    entries.push(entry);
   }
 
-  for (let row = 0; row < grid.length; row += 1) {
-    for (let col = 0; col < grid[row].length; col += 1) {
-      if (!grid[row][col]) {
-        grid[row][col] = alphabet[Math.floor(Math.random() * alphabet.length)];
-      }
-    }
-  }
-
-  return { grid, placedWords: shuffle(placedWords) };
+  return { grid, entries };
 };
 
-export default function WordSearchPage() {
+const getEntryValue = (entry, userLetters) =>
+  getEntryCells(entry)
+    .map((cell) => userLetters[cellKey(cell.row, cell.col)] || "")
+    .join("");
+
+export default function CrosswordPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [lists, setLists] = useState([]);
@@ -243,40 +302,66 @@ export default function WordSearchPage() {
   const [error, setError] = useState("");
   const [activeMode, setActiveMode] = useState("setup");
   const [grid, setGrid] = useState([]);
-  const [targetWords, setTargetWords] = useState([]);
-  const [selectedStart, setSelectedStart] = useState(null);
-  const [selectedCells, setSelectedCells] = useState([]);
-  const [foundWordIds, setFoundWordIds] = useState([]);
+  const [entries, setEntries] = useState([]);
+  const [userLetters, setUserLetters] = useState({});
+  const [wrongCellKeys, setWrongCellKeys] = useState([]);
+  const [checkedCorrectEntryIds, setCheckedCorrectEntryIds] = useState([]);
+  const [activeEntryId, setActiveEntryId] = useState(null);
+  const [checkCount, setCheckCount] = useState(0);
   const [missCount, setMissCount] = useState(0);
   const [gameStartedAt, setGameStartedAt] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [completedElapsedSeconds, setCompletedElapsedSeconds] = useState(0);
-  const [recentWordSearchIds, setRecentWordSearchIds] = useState([]);
+  const [recentCrosswordIds, setRecentCrosswordIds] = useState([]);
   const boardRef = useRef(null);
   const resultsRef = useRef(null);
 
   const selectedGameSize =
     gameSizes.find((gameSize) => gameSize.value === selectedSize) || gameSizes[0];
-  const bonusChallengeText = `Bonus challenge: Find every word in ${formatElapsedTime(
-    selectedGameSize.bonusSeconds,
-  )} or less.`;
   const isGameActive = activeMode === "play";
   const isGameComplete = activeMode === "results";
-  const didBeatBonusChallenge =
-    isGameComplete && completedElapsedSeconds <= selectedGameSize.bonusSeconds;
-  const foundCellKeys = useMemo(() => {
-    const keys = new Set();
-    targetWords
-      .filter((word) => foundWordIds.includes(word.id))
-      .forEach((word) => {
-        word.cells.forEach((cell) => keys.add(cellKey(cell)));
-      });
-    return keys;
-  }, [foundWordIds, targetWords]);
-  const selectedCellKeys = useMemo(
-    () => new Set(selectedCells.map((cell) => cellKey(cell))),
-    [selectedCells],
+  const checkedCorrectEntryIdSet = useMemo(
+    () => new Set(checkedCorrectEntryIds),
+    [checkedCorrectEntryIds],
   );
+  const activeEntry = useMemo(
+    () => entries.find((entry) => entry.id === activeEntryId) || null,
+    [activeEntryId, entries],
+  );
+  const activeCellKeys = useMemo(() => {
+    if (!activeEntry) {
+      return new Set();
+    }
+
+    return new Set(getEntryCells(activeEntry).map((cell) => cellKey(cell.row, cell.col)));
+  }, [activeEntry]);
+  const lockedCellKeys = useMemo(() => {
+    const keys = new Set();
+
+    entries
+      .filter((entry) => checkedCorrectEntryIdSet.has(entry.id))
+      .forEach((entry) => {
+        getEntryCells(entry).forEach((cell) => keys.add(cellKey(cell.row, cell.col)));
+      });
+
+    return keys;
+  }, [checkedCorrectEntryIdSet, entries]);
+  const acrossEntries = useMemo(
+    () =>
+      entries
+        .filter((entry) => entry.orientation === "across")
+        .sort((left, right) => left.number - right.number),
+    [entries],
+  );
+  const downEntries = useMemo(
+    () =>
+      entries
+        .filter((entry) => entry.orientation === "down")
+        .sort((left, right) => left.number - right.number),
+    [entries],
+  );
+  const didBeatBonusChallenge =
+    isGameComplete && checkCount <= 1;
 
   const loadLists = useEffectEvent(async ({ silent = false } = {}) => {
     if (!silent) {
@@ -405,7 +490,7 @@ export default function WordSearchPage() {
   }, [isGameComplete]);
 
   useEffect(() => {
-    if (targetWords.length === 0 || foundWordIds.length !== targetWords.length) {
+    if (entries.length === 0 || checkedCorrectEntryIds.length !== entries.length) {
       return;
     }
 
@@ -416,14 +501,16 @@ export default function WordSearchPage() {
     setCompletedElapsedSeconds(finalElapsedSeconds);
     setElapsedSeconds(finalElapsedSeconds);
     setActiveMode("results");
-  }, [foundWordIds.length, gameStartedAt, targetWords.length]);
+  }, [checkedCorrectEntryIds.length, entries.length, gameStartedAt]);
 
   const resetGameState = () => {
     setGrid([]);
-    setTargetWords([]);
-    setSelectedStart(null);
-    setSelectedCells([]);
-    setFoundWordIds([]);
+    setEntries([]);
+    setUserLetters({});
+    setWrongCellKeys([]);
+    setCheckedCorrectEntryIds([]);
+    setActiveEntryId(null);
+    setCheckCount(0);
     setMissCount(0);
     setGameStartedAt(null);
     setElapsedSeconds(0);
@@ -471,7 +558,7 @@ export default function WordSearchPage() {
     }
 
     if (selectedStrengths.length === 0) {
-      setError("Choose at least one word strength for word search.");
+      setError("Choose at least one word strength for crossword.");
       return;
     }
 
@@ -489,29 +576,28 @@ export default function WordSearchPage() {
           word.definition &&
           selectedStrengths.includes(word.strength || "weak"),
       );
-      const recentWordIds = new Set(recentWordSearchIds);
-      const puzzle = buildWordSearch(
+      const puzzle = buildCrossword(
         usableWords,
         selectedGameSize,
         selectedDirection,
-        recentWordIds,
+        new Set(recentCrosswordIds),
       );
 
-      if (puzzle.placedWords.length < selectedGameSize.wordCount) {
+      if (puzzle.entries.length < selectedGameSize.wordCount) {
         setError(
-          `You need at least ${selectedGameSize.wordCount} searchable answers for a ${selectedGameSize.label.toLowerCase()} word search. Hidden answers should use letters A-Z and fit inside a ${selectedGameSize.gridSize}x${selectedGameSize.gridSize} grid.`,
+          `${notEnoughCrosswordWordsPrefix} ${selectedGameSize.wordCount} crossword-friendly words for a ${selectedGameSize.label.toLowerCase()} puzzle. Answers need to use letters A-Z and fit inside the grid.`,
         );
         return;
       }
 
       resetGameState();
       setGrid(puzzle.grid);
-      setTargetWords(puzzle.placedWords);
-      setRecentWordSearchIds((currentIds) => {
+      setEntries(puzzle.entries);
+      setRecentCrosswordIds((currentIds) => {
         const nextIds = [
-          ...puzzle.placedWords.map((word) => word.id),
+          ...puzzle.entries.map((entry) => entry.id),
           ...currentIds.filter(
-            (wordId) => !puzzle.placedWords.some((word) => word.id === wordId),
+            (wordId) => !puzzle.entries.some((entry) => entry.id === wordId),
           ),
         ];
 
@@ -526,59 +612,150 @@ export default function WordSearchPage() {
         return;
       }
 
-      setError(err.response?.data?.detail || "We couldn't start word search.");
+      setError(err.response?.data?.detail || "We couldn't start crossword.");
     } finally {
       setGameLoading(false);
     }
   };
 
-  const handleCellClick = (row, col) => {
-    if (!isGameActive) {
-      return;
-    }
+  const focusCell = (row, col) => {
+    window.requestAnimationFrame(() => {
+      const nextInput = document.querySelector(
+        `[data-crossword-cell="${cellKey(row, col)}"]`,
+      );
 
-    const clickedCell = { row, col };
+      nextInput?.focus();
+      nextInput?.select();
+    });
+  };
 
-    if (!selectedStart) {
-      setSelectedStart(clickedCell);
-      setSelectedCells([clickedCell]);
-      return;
-    }
-
-    const nextSelectedCells = getLineCells(selectedStart, clickedCell);
-
-    if (nextSelectedCells.length === 0) {
-      setMissCount((currentMissCount) => currentMissCount + 1);
-      setSelectedStart(clickedCell);
-      setSelectedCells([clickedCell]);
-      return;
-    }
-
-    const selectedForward = nextSelectedCells
-      .map((cell) => grid[cell.row][cell.col])
-      .join("");
-    const selectedBackward = [...nextSelectedCells]
-      .reverse()
-      .map((cell) => grid[cell.row][cell.col])
-      .join("");
-    const matchingWord = targetWords.find(
-      (word) =>
-        !foundWordIds.includes(word.id) &&
-        (word.gridWord === selectedForward || word.gridWord === selectedBackward),
+  const focusNextOpenCell = (entry, row, col, direction = 1) => {
+    const activeCells = getEntryCells(entry);
+    const currentCellIndex = activeCells.findIndex(
+      (cell) => cell.row === row && cell.col === col,
     );
 
-    setSelectedCells(nextSelectedCells);
-    setSelectedStart(null);
+    for (
+      let index = currentCellIndex + direction;
+      index >= 0 && index < activeCells.length;
+      index += direction
+    ) {
+      const nextCell = activeCells[index];
 
-    if (matchingWord) {
-      setFoundWordIds((currentFoundIds) => [...currentFoundIds, matchingWord.id]);
+      if (!lockedCellKeys.has(cellKey(nextCell.row, nextCell.col))) {
+        focusCell(nextCell.row, nextCell.col);
+        return;
+      }
+    }
+  };
+
+  const handleCellClick = (row, col, cell) => {
+    if (!cell || isGameComplete) {
       return;
     }
 
-    setMissCount((currentMissCount) => currentMissCount + 1);
-    window.setTimeout(() => {
-      setSelectedCells([]);
-    }, 450);
+    const cellEntries = cell.entryIds
+      .map((entryId) => entries.find((entry) => entry.id === entryId))
+      .filter(Boolean)
+      .sort((left, right) => {
+        if (left.orientation !== right.orientation) {
+          return left.orientation === "across" ? -1 : 1;
+        }
+
+        return left.number - right.number;
+      });
+
+    if (cellEntries.length === 0) {
+      return;
+    }
+
+    const activeIndex = cellEntries.findIndex((entry) => entry.id === activeEntryId);
+    const nextEntry = activeIndex >= 0 ? cellEntries[(activeIndex + 1) % cellEntries.length] : cellEntries[0];
+
+    setActiveEntryId(nextEntry.id);
+
+    if (lockedCellKeys.has(cellKey(row, col))) {
+      focusNextOpenCell(nextEntry, row, col);
+      return;
+    }
+
+    focusCell(row, col);
+  };
+
+  const handleCellChange = (row, col, value) => {
+    const nextLetter = normalizeForGrid(value).slice(-1);
+    const key = cellKey(row, col);
+    const touchedEntryIds = grid[row][col]?.entryIds || [];
+
+    if (lockedCellKeys.has(key)) {
+      return;
+    }
+
+    setUserLetters((currentLetters) => ({
+      ...currentLetters,
+      [key]: nextLetter,
+    }));
+    setWrongCellKeys((currentKeys) => {
+      const touchedCellKeys = entries
+        .filter((entry) => touchedEntryIds.includes(entry.id))
+        .flatMap((entry) => getEntryCells(entry).map((cell) => cellKey(cell.row, cell.col)));
+      const touchedCellKeySet = new Set(touchedCellKeys);
+
+      return currentKeys.filter((cell) => !touchedCellKeySet.has(cell));
+    });
+    setCheckedCorrectEntryIds((currentIds) =>
+      currentIds.filter((entryId) => !touchedEntryIds.includes(entryId)),
+    );
+
+    if (!nextLetter || !activeEntry) {
+      return;
+    }
+
+    focusNextOpenCell(activeEntry, row, col);
+  };
+
+  const handleCellKeyDown = (row, col, event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleCheckPuzzle();
+      return;
+    }
+
+    if (event.key !== "Backspace" || !activeEntry || userLetters[cellKey(row, col)]) {
+      return;
+    }
+
+    focusNextOpenCell(activeEntry, row, col, -1);
+  };
+
+  const handleCheckPuzzle = () => {
+    const nextWrongCellKeys = [];
+    const nextCorrectEntryIds = [];
+
+    setCheckCount((currentCheckCount) => currentCheckCount + 1);
+
+    entries.forEach((entry) => {
+      const currentValue = getEntryValue(entry, userLetters);
+      if (currentValue.length !== entry.answer.length) {
+        return;
+      }
+
+      if (currentValue === entry.answer) {
+        nextCorrectEntryIds.push(entry.id);
+        return;
+      }
+
+      getEntryCells(entry).forEach((cell) => {
+        nextWrongCellKeys.push(cellKey(cell.row, cell.col));
+      });
+    });
+
+    setWrongCellKeys([...new Set(nextWrongCellKeys)]);
+    setCheckedCorrectEntryIds(nextCorrectEntryIds);
+
+    if (nextWrongCellKeys.length > 0) {
+      setMissCount((currentMissCount) => currentMissCount + 1);
+    }
   };
 
   const handleResetToSetup = () => {
@@ -589,6 +766,33 @@ export default function WordSearchPage() {
 
   const handlePlayAgain = () => {
     void buildGameFromSettings();
+  };
+
+  const renderClueCard = (entry) => {
+    const isSolved = checkedCorrectEntryIdSet.has(entry.id);
+
+    return (
+      <div
+        key={entry.id}
+        style={{
+          border: isSolved
+            ? "1px solid rgba(118, 247, 213, 0.42)"
+            : "1px solid rgba(130, 151, 255, 0.16)",
+          borderRadius: "16px",
+          padding: "10px 12px",
+          background: isSolved
+            ? "rgba(118, 247, 213, 0.12)"
+            : "rgba(255,255,255,0.04)",
+          color: isSolved ? "#8ff8de" : textStrong,
+          display: "grid",
+          gap: "4px",
+        }}
+      >
+        <span style={{ textDecoration: isSolved ? "line-through" : "none" }}>
+          <strong>{entry.number}</strong>&nbsp;&nbsp;{entry.clueText}
+        </span>
+      </div>
+    );
   };
 
   return (
@@ -615,7 +819,7 @@ export default function WordSearchPage() {
                 fontSize: "0.78rem",
               }}
             >
-              Word Search
+              Crossword
             </p>
             <h1
               style={{
@@ -627,23 +831,23 @@ export default function WordSearchPage() {
                   "0 0 24px rgba(81, 183, 255, 0.18), 0 0 60px rgba(255, 72, 176, 0.14)",
               }}
             >
-              {isGameActive
-              ? "Find every hidden word."
-              : isGameComplete
-              ? "Find every hidden word."
-              : "Create a word search."} 
+              {isGameComplete
+                ? "Crossword complete."
+                : isGameActive
+                  ? "Fill in the puzzle."
+                  : "Build a clue grid."}
             </h1>
             <p style={{ margin: 0, maxWidth: "62ch", color: textMuted, fontSize: "1.02rem" }}>
               {isGameActive
-              ? ""
-              : "Use the word list as your clue, then find each hidden translation in the grid."}
+                ? ""
+                : "Use vocabulary clues to fill a crossword made from your deck words."}
             </p>
           </div>
         </section>
 
         {error &&
         error !== chooseDeckErrorMessage &&
-        !error.startsWith(notEnoughSearchableWordsPrefix) ? (
+        !error.startsWith(notEnoughCrosswordWordsPrefix) ? (
           <section
             style={{
               background: "rgba(255, 77, 157, 0.12)",
@@ -691,7 +895,7 @@ export default function WordSearchPage() {
                   Game setup
                 </p>
                 <h2 style={{ margin: "8px 0 0", color: textStrong, fontSize: "1.9rem" }}>
-                  Build a word search
+                  Create a crossword
                 </h2>
               </div>
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
@@ -711,12 +915,12 @@ export default function WordSearchPage() {
                 style={{
                   border: "1px dashed rgba(130, 151, 255, 0.22)",
                   borderRadius: "22px",
-                  padding: "24px",
+                  padding: "22px",
                   color: textMuted,
                   background: "rgba(255,255,255,0.03)",
                 }}
               >
-                You need at least one deck before you can start word search.
+                You need at least one deck before you can start crossword.
               </div>
             ) : (
               <div style={{ display: "grid", gap: "18px" }}>
@@ -727,14 +931,14 @@ export default function WordSearchPage() {
                       color: "#76f7d5",
                       textTransform: "uppercase",
                       letterSpacing: "0.12em",
-                      fontSize: "0.74rem",
+                      fontSize: "0.75rem",
                     }}
                   >
-                    Pick a language
+                    Target language
                   </p>
                   <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                     {availableLanguages.map((language) => {
-                      const isActive = selectedLanguage === language;
+                      const isSelected = selectedLanguage === language;
 
                       return (
                         <button
@@ -743,18 +947,15 @@ export default function WordSearchPage() {
                           onClick={() => handleSelectLanguage(language)}
                           style={{
                             borderRadius: "999px",
-                            padding: "11px 16px",
-                            border: isActive
+                            padding: "10px 16px",
+                            border: isSelected
                               ? "1px solid rgba(118, 247, 213, 0.42)"
                               : "1px solid rgba(130, 151, 255, 0.18)",
-                            background: isActive
-                              ? "linear-gradient(180deg, rgba(72, 183, 255, 0.16), rgba(255, 77, 157, 0.1))"
+                            background: isSelected
+                              ? "linear-gradient(135deg, rgba(72, 183, 255, 0.18), rgba(255, 77, 157, 0.12))"
                               : "rgba(255,255,255,0.04)",
                             color: textStrong,
                             cursor: "pointer",
-                            boxShadow: isActive
-                              ? "0 0 22px rgba(118, 247, 213, 0.08)"
-                              : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
                           }}
                         >
                           {language}
@@ -772,10 +973,10 @@ export default function WordSearchPage() {
                         color: "#76f7d5",
                         textTransform: "uppercase",
                         letterSpacing: "0.12em",
-                        fontSize: "0.74rem",
+                        fontSize: "0.75rem",
                       }}
                     >
-                      {selectedLanguage}
+                      Decks for {selectedLanguage}
                     </p>
                     {visibleDecks.length === 0 ? (
                       <p style={{ margin: 0, color: textMuted }}>
@@ -898,12 +1099,11 @@ export default function WordSearchPage() {
                           >
                             <span>{gameSize.label}</span>
                             <span style={{ color: textMuted, fontSize: "0.8rem" }}>
-                              {gameSize.wordCount} words
+                              {gameSize.wordCount} clues
                             </span>
                             <span style={{ color: textMuted, fontSize: "0.8rem" }}>
                               {gameSize.gridSize}x{gameSize.gridSize}
                             </span>
-                            
                           </button>
                         );
                       })}
@@ -948,11 +1148,9 @@ export default function WordSearchPage() {
                               textAlign: "center",
                             }}
                           >
-                            <span>
-                              {typeof direction.label === "function"
-                                ? direction.label(selectedLanguage)
-                                : direction.label}
-                            </span>
+                            {typeof direction.label === "function"
+                              ? direction.label(selectedLanguage)
+                              : direction.label}
                           </button>
                         );
                       })}
@@ -1018,7 +1216,7 @@ export default function WordSearchPage() {
               </p>
             ) : null}
 
-            {error.startsWith(notEnoughSearchableWordsPrefix) ? (
+            {error.startsWith(notEnoughCrosswordWordsPrefix) ? (
               <p style={{ margin: "0 0 -8px", color: "#ffb6d7", fontSize: "0.92rem" }}>
                 {error}
               </p>
@@ -1033,7 +1231,7 @@ export default function WordSearchPage() {
                 style={primaryButtonStyle}
                 disabled={gameLoading || loading || lists.length === 0}
               >
-                {gameLoading ? "Building word search..." : "Start word search"}
+                {gameLoading ? "Building crossword..." : "Start crossword"}
               </button>
               <button type="button" onClick={() => navigate("/play")} style={secondaryButtonStyle}>
                 Back to games
@@ -1064,46 +1262,88 @@ export default function WordSearchPage() {
                 flexWrap: "wrap",
               }}
             >
-              <p style={{ margin: 0, color: "#76f7d5" }}>
-                {foundWordIds.length} of {targetWords.length} words found
-              </p>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <p style={{ margin: 0, color: "#76f7d5" }}>
+                  {checkedCorrectEntryIds.length} of {entries.length} clues solved
+                </p>
+                <span className="crossword-info-tooltip" tabIndex={0}>
+                  i
+                  <span className="crossword-info-tooltip-text">
+                    In this version, every clue answer is valid, but not every adjacent
+                    group of letters forms a crossword word.
+                  </span>
+                </span>
+              </div>
               <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-                <p style={{ margin: 0, color: textMuted }}>Misses: {missCount}</p>
+                <p style={{ margin: 0, color: textMuted }}>Checks: {checkCount}</p>
                 <p style={{ margin: 0, color: textMuted }}>
                   Time: {formatElapsedTime(elapsedSeconds)}
                 </p>
               </div>
             </div>
 
-            <div className="word-search-play-area">
+            <div className="crossword-play-area">
               <div
-                className="word-search-grid"
+                className={`crossword-grid crossword-grid-${selectedSize}`}
                 style={{ gridTemplateColumns: `repeat(${grid.length}, minmax(0, 1fr))` }}
               >
                 {grid.map((row, rowIndex) =>
-                  row.map((letter, colIndex) => {
-                    const key = `${rowIndex}-${colIndex}`;
-                    const isSelected = selectedCellKeys.has(key);
-                    const isFound = foundCellKeys.has(key);
+                  row.map((cell, colIndex) => {
+                    const key = cellKey(rowIndex, colIndex);
+                    const startingEntries = entries.filter(
+                      (entry) => entry.row === rowIndex && entry.col === colIndex,
+                    );
+                    const isLocked = lockedCellKeys.has(key);
+                    const isWrong = !isLocked && wrongCellKeys.includes(key);
+                    const isActive = activeCellKeys.has(key);
+
+                    if (!cell) {
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          className="crossword-cell crossword-cell-block"
+                          aria-label="Clear selected crossword word"
+                          onClick={() => {
+                            setActiveEntryId(null);
+                            setWrongCellKeys([]);
+                          }}
+                        />
+                      );
+                    }
 
                     return (
-                      <button
+                      <label
                         key={key}
-                        type="button"
-                        className={`word-search-cell ${isSelected ? "is-selected" : ""} ${
-                          isFound ? "is-found" : ""
-                        }`}
-                        disabled={isGameComplete}
-                        onClick={() => handleCellClick(rowIndex, colIndex)}
+                        className={`crossword-cell ${isWrong ? "is-wrong" : ""} ${
+                          isLocked ? "is-solved" : ""
+                        } ${isActive ? "is-active" : ""}`}
+                        onClick={() => handleCellClick(rowIndex, colIndex, cell)}
                       >
-                        {letter}
-                      </button>
+                        {startingEntries.length > 0 ? (
+                          <span className="crossword-cell-number">
+                            {startingEntries[0].number}
+                          </span>
+                        ) : null}
+                        <input
+                          data-crossword-cell={key}
+                          value={userLetters[key] || ""}
+                          maxLength={1}
+                          disabled={isGameComplete}
+                          readOnly={isLocked}
+                          onChange={(event) =>
+                            handleCellChange(rowIndex, colIndex, event.target.value)
+                          }
+                          onKeyDown={(event) => handleCellKeyDown(rowIndex, colIndex, event)}
+                          aria-label={`Crossword cell ${rowIndex + 1}, ${colIndex + 1}`}
+                        />
+                      </label>
                     );
                   }),
                 )}
               </div>
 
-              <aside className="word-search-word-list">
+              <aside className="crossword-clue-list">
                 <p
                   style={{
                     margin: 0,
@@ -1113,53 +1353,59 @@ export default function WordSearchPage() {
                     fontSize: "0.75rem",
                   }}
                 >
-                  Find these translated words
+                  Clues
                 </p>
-                <div style={{ display: "grid", gap: "8px" }}>
-                  {targetWords.map((word) => {
-                    const isFound = foundWordIds.includes(word.id);
+                <div style={{ display: "grid", gap: "16px" }}>
+                  <section style={{ display: "grid", gap: "8px" }}>
+                    <h3
+                      style={{
+                        margin: 0,
+                        color: textStrong,
+                        fontSize: "1rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                      }}
+                    >
+                      Across
+                    </h3>
+                    {acrossEntries.length > 0 ? (
+                      acrossEntries.map(renderClueCard)
+                    ) : (
+                      <p style={{ margin: 0, color: textMuted }}>No across clues this round.</p>
+                    )}
+                  </section>
 
-                    return (
-                      <div
-                        key={word.id}
-                        style={{
-                          border: isFound
-                            ? "1px solid rgba(118, 247, 213, 0.42)"
-                            : "1px solid rgba(130, 151, 255, 0.16)",
-                          borderRadius: "16px",
-                          padding: "10px 12px",
-                          background: isFound
-                            ? "rgba(118, 247, 213, 0.12)"
-                            : "rgba(255,255,255,0.04)",
-                          color: isFound ? "#8ff8de" : textStrong,
-                          display: "grid",
-                          gap: "3px",
-                        }}
-                      >
-                        <span style={{ textDecoration: isFound ? "line-through" : "none" }}>
-                          {word.clueText}
-                        </span>
-                        
-                      </div>
-                    );
-                  })}
+                  <section style={{ display: "grid", gap: "8px" }}>
+                    <h3
+                      style={{
+                        margin: 0,
+                        color: textStrong,
+                        fontSize: "1rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                      }}
+                    >
+                      Down
+                    </h3>
+                    {downEntries.length > 0 ? (
+                      downEntries.map(renderClueCard)
+                    ) : (
+                      <p style={{ margin: 0, color: textMuted }}>No down clues this round.</p>
+                    )}
+                  </section>
                 </div>
               </aside>
             </div>
 
-            <p
-              style={{
-                margin: "-4px 0 0",
-                color: textStrong,
-                fontSize: "0.95rem",
-                textAlign: "center",
-              }}
-            >
-              {bonusChallengeText}
+            <p style={{ margin: "-4px 0 0", color: textStrong, textAlign: "center" }}>
+              Bonus challenge: Solve the entire board without checking more than once.
             </p>
 
             {!isGameComplete ? (
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                <button type="button" onClick={handleCheckPuzzle} style={primaryButtonStyle}>
+                  Check puzzle
+                </button>
                 <button type="button" onClick={handleResetToSetup} style={secondaryButtonStyle}>
                   Back to setup
                 </button>
@@ -1191,12 +1437,13 @@ export default function WordSearchPage() {
                   fontSize: "0.75rem",
                 }}
               >
-                Word search results
+                Crossword results
               </p>
               <h2 style={{ margin: 0, color: textStrong, fontSize: "2rem" }}>
-                You found all {targetWords.length} words!
+                You solved all {entries.length} clues!
               </h2>
-              <p style={{ margin: 0, color: textMuted }}>Misses: {missCount}</p>
+              <p style={{ margin: 0, color: textMuted }}>Checks: {checkCount}</p>
+              <p style={{ margin: 0, color: textMuted }}>Wrong checks: {missCount}</p>
               <p style={{ margin: 0, color: textMuted }}>
                 Time: {formatElapsedTime(completedElapsedSeconds)}
               </p>
@@ -1228,12 +1475,11 @@ export default function WordSearchPage() {
                   Bonus challenge cleared
                 </p>
                 <h3 style={{ margin: 0, color: textStrong, fontSize: "1.45rem" }}>
-                  Speed-reader mode: activated.
+                  First-check finish. Beautifully clean.
                 </h3>
                 <p style={{ margin: 0, color: textMuted }}>
-                  You solved the {selectedGameSize.label.toLowerCase()} grid in{" "}
-                  {formatElapsedTime(completedElapsedSeconds)}, beating the{" "}
-                  {formatElapsedTime(selectedGameSize.bonusSeconds)} target.
+                  You solved the whole board with {checkCount} check
+                  {checkCount === 1 ? "" : "s"}. That is crossword confidence.
                 </p>
               </div>
             ) : null}
@@ -1261,13 +1507,13 @@ export default function WordSearchPage() {
                     fontSize: "0.78rem",
                   }}
                 >
-                  Perfect search
+                  Perfect grid
                 </p>
                 <h3 style={{ margin: 0, color: textStrong, fontSize: "1.45rem" }}>
-                  Laser focus. Zero misses.
+                  No wrong checks. Clean solve.
                 </h3>
                 <p style={{ margin: 0, color: textMuted }}>
-                  You tracked every hidden word without a single false selection.
+                  Every clue clicked into place without needing a correction.
                 </p>
               </div>
             ) : null}

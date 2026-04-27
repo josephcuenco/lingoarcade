@@ -61,6 +61,7 @@ export default function QuizPage() {
   const [selectedQuestionTypes, setSelectedQuestionTypes] = useState([
     "multiple-choice",
     "translation",
+    "true-false",
   ]);
   const [loading, setLoading] = useState(true);
   const [quizLoading, setQuizLoading] = useState(false);

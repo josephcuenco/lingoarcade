@@ -588,7 +588,7 @@ export default function BingoPage() {
             </h1>
             <p style={{ margin: 0, maxWidth: "62ch", color: textMuted, fontSize: "1.02rem" }}>
               {activeMode === "setup"
-              ? "Pick a language, choose one or more decks, then build a bingo board."
+              ? "Study the board, then match each prompt to the right word before the next prompt appears. Missed words come back until you find them all."
               : isGameComplete
                 ? ""
                 : "Study the board, then match each prompt to the right word before the next prompt appears. Missed words come back until you find them all."}

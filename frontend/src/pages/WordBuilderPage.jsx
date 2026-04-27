@@ -19,9 +19,36 @@ import {
 } from "./gameShared";
 
 const gameSizes = [
-  { value: "small", label: "Small", gridSize: 10, wordCount: 6, bonusSeconds: 40 },
-  { value: "medium", label: "Medium", gridSize: 12, wordCount: 10, bonusSeconds: 80 },
-  { value: "large", label: "Large", gridSize: 14, wordCount: 14, bonusSeconds: 120 },
+  {
+    value: "small",
+    label: "Small",
+    wordCount: 6,
+    gridSize: 5,
+    distractionCount: 3,
+    distractionRetryCount: 2,
+  },
+  {
+    value: "medium",
+    label: "Medium",
+    wordCount: 10,
+    gridSize: 6,
+    distractionCount: 5,
+    distractionRetryCount: 4,
+  },
+  {
+    value: "large",
+    label: "Large",
+    wordCount: 14,
+    gridSize: 7,
+    distractionCount: 7,
+    distractionRetryCount: 5,
+  },
+];
+
+const gameSpeeds = [
+  { value: "slow", label: "Slow", seconds: 14 },
+  { value: "medium", label: "Medium", seconds: 10 },
+  { value: "fast", label: "Fast", seconds: 7 },
 ];
 
 const gameDirections = [
@@ -33,25 +60,11 @@ const gameDirections = [
     value: "language-to-english",
     label: (language) => `${language || "Language"} -> English`,
   },
-  {
-    value: "both",
-    label: "Both",
-  },
-];
-
-const directions = [
-  { row: 0, col: 1 },
-  { row: 1, col: 0 },
-  { row: 1, col: 1 },
-  { row: -1, col: 1 },
-  { row: 0, col: -1 },
-  { row: -1, col: 0 },
-  { row: -1, col: -1 },
-  { row: 1, col: -1 },
+  { value: "both", label: "Both" },
 ];
 
 const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const notEnoughSearchableWordsPrefix = "You need at least";
+const notEnoughWordsPrefix = "You need at least";
 
 const normalizeForGrid = (value) =>
   value
@@ -59,6 +72,14 @@ const normalizeForGrid = (value) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
     .replace(/[^A-Z]/g, "");
+
+const formatPromptCountdown = (seconds) => {
+  if (seconds >= 10) {
+    return `${Math.ceil(seconds)}s`;
+  }
+
+  return `${Math.max(0, seconds).toFixed(1)}s`;
+};
 
 const getDefaultLanguageFromLists = (lists) => {
   if (!lists.length) {
@@ -85,75 +106,7 @@ const getDefaultLanguageFromLists = (lists) => {
   return mostRecentlyCreatedDeck?.language || "";
 };
 
-const createEmptyGrid = (size) =>
-  Array.from({ length: size }, () => Array.from({ length: size }, () => ""));
-
-const getLineCells = (start, end) => {
-  const rowDifference = end.row - start.row;
-  const colDifference = end.col - start.col;
-  const rowStep = Math.sign(rowDifference);
-  const colStep = Math.sign(colDifference);
-  const rowDistance = Math.abs(rowDifference);
-  const colDistance = Math.abs(colDifference);
-
-  if (
-    !(
-      rowDistance === 0 ||
-      colDistance === 0 ||
-      rowDistance === colDistance
-    )
-  ) {
-    return [];
-  }
-
-  const length = Math.max(rowDistance, colDistance) + 1;
-  return Array.from({ length }, (_, index) => ({
-    row: start.row + rowStep * index,
-    col: start.col + colStep * index,
-  }));
-};
-
-const cellKey = (cell) => `${cell.row}-${cell.col}`;
-
-const placeWord = (grid, word) => {
-  const size = grid.length;
-  const attempts = 220;
-
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const direction = shuffle(directions)[0];
-    const row = Math.floor(Math.random() * size);
-    const col = Math.floor(Math.random() * size);
-    const endRow = row + direction.row * (word.length - 1);
-    const endCol = col + direction.col * (word.length - 1);
-
-    if (endRow < 0 || endRow >= size || endCol < 0 || endCol >= size) {
-      continue;
-    }
-
-    const cells = Array.from({ length: word.length }, (_, index) => ({
-      row: row + direction.row * index,
-      col: col + direction.col * index,
-    }));
-    const canPlace = cells.every((cell, index) => {
-      const currentValue = grid[cell.row][cell.col];
-      return !currentValue || currentValue === word[index];
-    });
-
-    if (!canPlace) {
-      continue;
-    }
-
-    cells.forEach((cell, index) => {
-      grid[cell.row][cell.col] = word[index];
-    });
-
-    return cells;
-  }
-
-  return null;
-};
-
-const getWordSearchDirection = (selectedDirection) => {
+const getBuilderDirection = (selectedDirection) => {
   if (selectedDirection !== "both") {
     return selectedDirection;
   }
@@ -161,78 +114,93 @@ const getWordSearchDirection = (selectedDirection) => {
   return Math.random() >= 0.5 ? "english-to-language" : "language-to-english";
 };
 
-const buildWordSearch = (
-  words,
-  gameSize,
-  selectedDirection,
-  recentWordIds = new Set(),
-) => {
-  const grid = createEmptyGrid(gameSize.gridSize);
-  const placedWords = [];
+const getNextPrompt = (queue, completedIds) => {
+  const nextId = queue.find((wordId) => !completedIds.includes(wordId));
+  const nextQueue = queue.filter((wordId) => wordId !== nextId);
+
+  return { nextId: nextId || null, nextQueue };
+};
+
+const createDistractionLetters = (answer, distractionCount) => {
+  const answerLetters = new Set(answer.split(""));
+  const distractionAlphabet = alphabet
+    .split("")
+    .filter((letter) => !answerLetters.has(letter));
+  const availableLetters = distractionAlphabet.length ? distractionAlphabet : alphabet.split("");
+
+  return Array.from({ length: distractionCount }, (_, index) => ({
+    id: `distraction-${index}-${Math.random().toString(16).slice(2)}`,
+    letter: availableLetters[Math.floor(Math.random() * availableLetters.length)],
+    isDistraction: true,
+    isEmpty: false,
+  }));
+};
+
+const createLetterTiles = (answer, gridSize, distractionCount = 0) => {
+  const answerTiles = answer.split("").map((letter, index) => ({
+    id: `answer-${index}-${letter}`,
+    letter,
+    isEmpty: false,
+    isDistraction: false,
+  }));
+  const distractionTiles = createDistractionLetters(answer, distractionCount);
+  const emptyCellCount = Math.max(
+    0,
+    gridSize * gridSize - answerTiles.length - distractionTiles.length,
+  );
+  const emptyTiles = Array.from({ length: emptyCellCount }, (_, index) => ({
+    id: `empty-${index}-${Math.random().toString(16).slice(2)}`,
+    letter: "",
+    isEmpty: true,
+    isDistraction: false,
+  }));
+
+  return shuffle([...answerTiles, ...distractionTiles, ...emptyTiles]);
+};
+
+const buildWordBuilderPrompts = (words, gameSize, selectedDirection, includeDistractions) => {
+  const distractionCount = includeDistractions ? gameSize.distractionCount : 0;
+
   const candidates = shuffle(words)
     .map((word) => {
-      const direction = getWordSearchDirection(selectedDirection);
-      const clueText =
+      const direction = getBuilderDirection(selectedDirection);
+      const promptText =
         direction === "english-to-language" ? word.definition : word.term;
-      const hiddenText =
+      const answerText =
         direction === "english-to-language" ? word.term : word.definition;
+      const answer = normalizeForGrid(answerText);
 
       return {
         id: word.id,
-        term: word.term,
-        definition: word.definition,
-        clueText,
-        hiddenText,
+        promptText,
+        answerText,
+        answer,
         direction,
-        gridWord: normalizeForGrid(hiddenText),
-        wasRecentlyUsed: recentWordIds.has(word.id),
       };
     })
     .filter(
       (word, index, allWords) =>
-        word.gridWord.length >= 3 &&
-        word.gridWord.length <= gameSize.gridSize &&
-        allWords.findIndex((candidate) => candidate.gridWord === word.gridWord) === index,
-    )
-    .sort((left, right) => {
-      if (left.wasRecentlyUsed !== right.wasRecentlyUsed) {
-        return left.wasRecentlyUsed ? 1 : -1;
-      }
+        word.answer.length >= 2 &&
+        word.answer.length <= gameSize.gridSize * gameSize.gridSize - distractionCount &&
+        allWords.findIndex((candidate) => candidate.answer === word.answer) === index,
+    );
 
-      return right.gridWord.length - left.gridWord.length;
-    });
-
-  for (const word of candidates) {
-    if (placedWords.length >= gameSize.wordCount) {
-      break;
-    }
-
-    const cells = placeWord(grid, word.gridWord);
-
-    if (cells) {
-      placedWords.push({ ...word, cells });
-    }
-  }
-
-  for (let row = 0; row < grid.length; row += 1) {
-    for (let col = 0; col < grid[row].length; col += 1) {
-      if (!grid[row][col]) {
-        grid[row][col] = alphabet[Math.floor(Math.random() * alphabet.length)];
-      }
-    }
-  }
-
-  return { grid, placedWords: shuffle(placedWords) };
+  return candidates.slice(0, gameSize.wordCount).map((word) => ({
+    ...word,
+    letters: createLetterTiles(word.answer, gameSize.gridSize, distractionCount),
+  }));
 };
 
-export default function WordSearchPage() {
+export default function WordBuilderPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [lists, setLists] = useState([]);
   const [selectedLanguage, setSelectedLanguage] = useState("");
   const [selectedDeckIds, setSelectedDeckIds] = useState([]);
   const [selectedSize, setSelectedSize] = useState("small");
+  const [selectedSpeed, setSelectedSpeed] = useState("medium");
   const [selectedDirection, setSelectedDirection] = useState("language-to-english");
+  const [includeDistractions, setIncludeDistractions] = useState(false);
   const [selectedStrengths, setSelectedStrengths] = useState([
     "weak",
     "okay",
@@ -242,41 +210,33 @@ export default function WordSearchPage() {
   const [gameLoading, setGameLoading] = useState(false);
   const [error, setError] = useState("");
   const [activeMode, setActiveMode] = useState("setup");
-  const [grid, setGrid] = useState([]);
-  const [targetWords, setTargetWords] = useState([]);
-  const [selectedStart, setSelectedStart] = useState(null);
-  const [selectedCells, setSelectedCells] = useState([]);
-  const [foundWordIds, setFoundWordIds] = useState([]);
+  const [prompts, setPrompts] = useState([]);
+  const [promptQueue, setPromptQueue] = useState([]);
+  const [currentPromptId, setCurrentPromptId] = useState(null);
+  const [promptRound, setPromptRound] = useState(0);
+  const [completedIds, setCompletedIds] = useState([]);
+  const [selectedTileIds, setSelectedTileIds] = useState([]);
+  const [hiddenTileIds, setHiddenTileIds] = useState([]);
+  const [builtAnswer, setBuiltAnswer] = useState("");
+  const [feedbackById, setFeedbackById] = useState({});
+  const [clickLocked, setClickLocked] = useState(false);
+  const [clickCount, setClickCount] = useState(0);
   const [missCount, setMissCount] = useState(0);
   const [gameStartedAt, setGameStartedAt] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [promptSecondsRemaining, setPromptSecondsRemaining] = useState(0);
   const [completedElapsedSeconds, setCompletedElapsedSeconds] = useState(0);
-  const [recentWordSearchIds, setRecentWordSearchIds] = useState([]);
   const boardRef = useRef(null);
   const resultsRef = useRef(null);
 
   const selectedGameSize =
     gameSizes.find((gameSize) => gameSize.value === selectedSize) || gameSizes[0];
-  const bonusChallengeText = `Bonus challenge: Find every word in ${formatElapsedTime(
-    selectedGameSize.bonusSeconds,
-  )} or less.`;
+  const selectedGameSpeed =
+    gameSpeeds.find((gameSpeed) => gameSpeed.value === selectedSpeed) || gameSpeeds[1];
+  const currentPrompt = prompts.find((prompt) => prompt.id === currentPromptId);
   const isGameActive = activeMode === "play";
   const isGameComplete = activeMode === "results";
-  const didBeatBonusChallenge =
-    isGameComplete && completedElapsedSeconds <= selectedGameSize.bonusSeconds;
-  const foundCellKeys = useMemo(() => {
-    const keys = new Set();
-    targetWords
-      .filter((word) => foundWordIds.includes(word.id))
-      .forEach((word) => {
-        word.cells.forEach((cell) => keys.add(cellKey(cell)));
-      });
-    return keys;
-  }, [foundWordIds, targetWords]);
-  const selectedCellKeys = useMemo(
-    () => new Set(selectedCells.map((cell) => cellKey(cell))),
-    [selectedCells],
-  );
+  const didFinishWithoutMisses = isGameComplete && missCount === 0;
 
   const loadLists = useEffectEvent(async ({ silent = false } = {}) => {
     if (!silent) {
@@ -362,23 +322,6 @@ export default function WordSearchPage() {
   }, [isGameActive]);
 
   useEffect(() => {
-    if (!isGameActive || !gameStartedAt) {
-      return undefined;
-    }
-
-    const updateElapsedTime = () => {
-      setElapsedSeconds(Math.floor((Date.now() - gameStartedAt.getTime()) / 1000));
-    };
-
-    updateElapsedTime();
-    const intervalId = window.setInterval(updateElapsedTime, 1000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [gameStartedAt, isGameActive]);
-
-  useEffect(() => {
     if (!isGameActive) {
       return;
     }
@@ -405,7 +348,83 @@ export default function WordSearchPage() {
   }, [isGameComplete]);
 
   useEffect(() => {
-    if (targetWords.length === 0 || foundWordIds.length !== targetWords.length) {
+    if (!isGameActive || !gameStartedAt) {
+      return undefined;
+    }
+
+    const updateElapsedTime = () => {
+      setElapsedSeconds(Math.floor((Date.now() - gameStartedAt.getTime()) / 1000));
+    };
+
+    updateElapsedTime();
+    const intervalId = window.setInterval(updateElapsedTime, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [gameStartedAt, isGameActive]);
+
+  useEffect(() => {
+    if (!isGameActive || !currentPromptId) {
+      setPromptSecondsRemaining(0);
+      return undefined;
+    }
+
+    const promptStartedAt = Date.now();
+    const promptDurationMs = selectedGameSpeed.seconds * 1000;
+
+    const updatePromptCountdown = () => {
+      setPromptSecondsRemaining(
+        Math.max(0, (promptDurationMs - (Date.now() - promptStartedAt)) / 1000),
+      );
+    };
+
+    updatePromptCountdown();
+    const intervalId = window.setInterval(updatePromptCountdown, 100);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [currentPromptId, isGameActive, promptRound, selectedGameSpeed.seconds]);
+
+  useEffect(() => {
+    if (!isGameActive || !currentPromptId) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setMissCount((currentMissCount) => currentMissCount + 1);
+      setPromptQueue((currentQueue) => [...currentQueue, currentPromptId]);
+
+      const { nextId, nextQueue } = getNextPrompt(
+        [...promptQueue, currentPromptId],
+        completedIds,
+      );
+
+      setCurrentPromptId(nextId);
+      setPromptQueue(nextQueue);
+      setPromptRound((currentRound) => currentRound + 1);
+      setSelectedTileIds([]);
+      setHiddenTileIds([]);
+      setBuiltAnswer("");
+      setFeedbackById({});
+      setClickLocked(false);
+    }, selectedGameSpeed.seconds * 1000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    completedIds,
+    currentPromptId,
+    isGameActive,
+    promptQueue,
+    promptRound,
+    selectedGameSpeed.seconds,
+  ]);
+
+  useEffect(() => {
+    if (activeMode !== "play" || prompts.length === 0 || completedIds.length !== prompts.length) {
       return;
     }
 
@@ -416,18 +435,62 @@ export default function WordSearchPage() {
     setCompletedElapsedSeconds(finalElapsedSeconds);
     setElapsedSeconds(finalElapsedSeconds);
     setActiveMode("results");
-  }, [foundWordIds.length, gameStartedAt, targetWords.length]);
+  }, [activeMode, completedIds.length, gameStartedAt, prompts.length]);
+
+  const resetPromptState = () => {
+    setSelectedTileIds([]);
+    setHiddenTileIds([]);
+    setBuiltAnswer("");
+    setFeedbackById({});
+    setClickLocked(false);
+  };
 
   const resetGameState = () => {
-    setGrid([]);
-    setTargetWords([]);
-    setSelectedStart(null);
-    setSelectedCells([]);
-    setFoundWordIds([]);
+    setPrompts([]);
+    setPromptQueue([]);
+    setCurrentPromptId(null);
+    setPromptRound(0);
+    setCompletedIds([]);
+    resetPromptState();
+    setClickCount(0);
     setMissCount(0);
     setGameStartedAt(null);
     setElapsedSeconds(0);
+    setPromptSecondsRemaining(0);
     setCompletedElapsedSeconds(0);
+  };
+
+  const advancePrompt = (nextCompletedIds = completedIds) => {
+    const { nextId, nextQueue } = getNextPrompt(promptQueue, nextCompletedIds);
+
+    setCurrentPromptId(nextId);
+    setPromptQueue(nextQueue);
+    setPromptRound((currentRound) => currentRound + 1);
+    resetPromptState();
+  };
+
+  const recycleCurrentPrompt = () => {
+    if (!currentPrompt) {
+      return;
+    }
+
+    const distractionCount = includeDistractions ? selectedGameSize.distractionCount : 0;
+    const refreshedPrompt = {
+      ...currentPrompt,
+      letters: createLetterTiles(currentPrompt.answer, selectedGameSize.gridSize, distractionCount),
+    };
+    const nextQueueWithRetry = [...promptQueue, currentPrompt.id];
+    const { nextId, nextQueue } = getNextPrompt(nextQueueWithRetry, completedIds);
+
+    setPrompts((currentPrompts) =>
+      currentPrompts.map((prompt) =>
+        prompt.id === currentPrompt.id ? refreshedPrompt : prompt,
+      ),
+    );
+    setCurrentPromptId(nextId);
+    setPromptQueue(nextQueue);
+    setPromptRound((currentRound) => currentRound + 1);
+    resetPromptState();
   };
 
   const handleSelectLanguage = (language) => {
@@ -471,7 +534,7 @@ export default function WordSearchPage() {
     }
 
     if (selectedStrengths.length === 0) {
-      setError("Choose at least one word strength for word search.");
+      setError("Choose at least one word strength for word builder.");
       return;
     }
 
@@ -489,34 +552,25 @@ export default function WordSearchPage() {
           word.definition &&
           selectedStrengths.includes(word.strength || "weak"),
       );
-      const recentWordIds = new Set(recentWordSearchIds);
-      const puzzle = buildWordSearch(
+      const nextPrompts = buildWordBuilderPrompts(
         usableWords,
         selectedGameSize,
         selectedDirection,
-        recentWordIds,
+        includeDistractions,
       );
 
-      if (puzzle.placedWords.length < selectedGameSize.wordCount) {
+      if (nextPrompts.length < selectedGameSize.wordCount) {
         setError(
-          `You need at least ${selectedGameSize.wordCount} searchable answers for a ${selectedGameSize.label.toLowerCase()} word search. Hidden answers should use letters A-Z and fit inside a ${selectedGameSize.gridSize}x${selectedGameSize.gridSize} grid.`,
+          `${notEnoughWordsPrefix} ${selectedGameSize.wordCount} spellable words for a ${selectedGameSize.label.toLowerCase()} word builder game.`,
         );
         return;
       }
 
       resetGameState();
-      setGrid(puzzle.grid);
-      setTargetWords(puzzle.placedWords);
-      setRecentWordSearchIds((currentIds) => {
-        const nextIds = [
-          ...puzzle.placedWords.map((word) => word.id),
-          ...currentIds.filter(
-            (wordId) => !puzzle.placedWords.some((word) => word.id === wordId),
-          ),
-        ];
-
-        return nextIds.slice(0, Math.max(selectedGameSize.wordCount * 3, 24));
-      });
+      setPrompts(nextPrompts);
+      const promptIds = shuffle(nextPrompts.map((prompt) => prompt.id));
+      setPromptQueue(promptIds.slice(1));
+      setCurrentPromptId(promptIds[0]);
       setGameStartedAt(new Date());
       setActiveMode("play");
     } catch (err) {
@@ -526,69 +580,98 @@ export default function WordSearchPage() {
         return;
       }
 
-      setError(err.response?.data?.detail || "We couldn't start word search.");
+      setError(err.response?.data?.detail || "We couldn't start word builder.");
     } finally {
       setGameLoading(false);
     }
   };
 
-  const handleCellClick = (row, col) => {
-    if (!isGameActive) {
+  const handleLetterClick = (tile) => {
+    if (
+      !isGameActive ||
+      clickLocked ||
+      tile.isEmpty ||
+      hiddenTileIds.includes(tile.id) ||
+      selectedTileIds.includes(tile.id) ||
+      !currentPrompt
+    ) {
       return;
     }
 
-    const clickedCell = { row, col };
+    setClickCount((currentClickCount) => currentClickCount + 1);
 
-    if (!selectedStart) {
-      setSelectedStart(clickedCell);
-      setSelectedCells([clickedCell]);
-      return;
-    }
+    if (tile.isDistraction) {
+      const nextHiddenTileIds = [...hiddenTileIds, tile.id];
+      const clickedDistractionCount = currentPrompt.letters.filter(
+        (letterTile) =>
+          letterTile.isDistraction && nextHiddenTileIds.includes(letterTile.id),
+      );
+      const shouldRetryPrompt =
+        clickedDistractionCount.length >= selectedGameSize.distractionRetryCount;
 
-    const nextSelectedCells = getLineCells(selectedStart, clickedCell);
-
-    if (nextSelectedCells.length === 0) {
       setMissCount((currentMissCount) => currentMissCount + 1);
-      setSelectedStart(clickedCell);
-      setSelectedCells([clickedCell]);
+      setClickLocked(true);
+      setFeedbackById((currentFeedback) => ({ ...currentFeedback, [tile.id]: "wrong" }));
+
+      window.setTimeout(() => {
+        setHiddenTileIds(nextHiddenTileIds);
+        setFeedbackById((currentFeedback) => {
+          const nextFeedback = { ...currentFeedback };
+          delete nextFeedback[tile.id];
+          return nextFeedback;
+        });
+
+        if (shouldRetryPrompt) {
+          recycleCurrentPrompt();
+          return;
+        }
+
+        setClickLocked(false);
+      }, 420);
       return;
     }
 
-    const selectedForward = nextSelectedCells
-      .map((cell) => grid[cell.row][cell.col])
-      .join("");
-    const selectedBackward = [...nextSelectedCells]
-      .reverse()
-      .map((cell) => grid[cell.row][cell.col])
-      .join("");
-    const matchingWord = targetWords.find(
-      (word) =>
-        !foundWordIds.includes(word.id) &&
-        (word.gridWord === selectedForward || word.gridWord === selectedBackward),
-    );
+    const expectedLetter = currentPrompt.answer[builtAnswer.length];
 
-    setSelectedCells(nextSelectedCells);
-    setSelectedStart(null);
+    if (tile.letter !== expectedLetter) {
+      setMissCount((currentMissCount) => currentMissCount + 1);
+      setClickLocked(true);
+      setFeedbackById((currentFeedback) => ({ ...currentFeedback, [tile.id]: "wrong" }));
 
-    if (matchingWord) {
-      setFoundWordIds((currentFoundIds) => [...currentFoundIds, matchingWord.id]);
+      window.setTimeout(() => {
+        setFeedbackById((currentFeedback) => {
+          const nextFeedback = { ...currentFeedback };
+          delete nextFeedback[tile.id];
+          return nextFeedback;
+        });
+        setClickLocked(false);
+      }, 420);
       return;
     }
 
-    setMissCount((currentMissCount) => currentMissCount + 1);
+    const nextBuiltAnswer = `${builtAnswer}${tile.letter}`;
+    const nextSelectedTileIds = [...selectedTileIds, tile.id];
+    setBuiltAnswer(nextBuiltAnswer);
+    setSelectedTileIds(nextSelectedTileIds);
+    setFeedbackById((currentFeedback) => ({ ...currentFeedback, [tile.id]: "correct" }));
+
+    if (nextBuiltAnswer !== currentPrompt.answer) {
+      return;
+    }
+
+    const nextCompletedIds = [...completedIds, currentPrompt.id];
+    setCompletedIds(nextCompletedIds);
+    setClickLocked(true);
+
     window.setTimeout(() => {
-      setSelectedCells([]);
-    }, 450);
+      advancePrompt(nextCompletedIds);
+    }, 650);
   };
 
   const handleResetToSetup = () => {
     resetGameState();
     setActiveMode("setup");
     setError("");
-  };
-
-  const handlePlayAgain = () => {
-    void buildGameFromSettings();
   };
 
   return (
@@ -615,7 +698,7 @@ export default function WordSearchPage() {
                 fontSize: "0.78rem",
               }}
             >
-              Word Search
+              Word Builder
             </p>
             <h1
               style={{
@@ -627,23 +710,25 @@ export default function WordSearchPage() {
                   "0 0 24px rgba(81, 183, 255, 0.18), 0 0 60px rgba(255, 72, 176, 0.14)",
               }}
             >
-              {isGameActive
-              ? "Find every hidden word."
-              : isGameComplete
-              ? "Find every hidden word."
-              : "Create a word search."} 
+              {activeMode === "setup"
+                ? "Rebuild scattered letters."
+                : isGameComplete
+                  ? "Word build complete."
+                  : "Click the letters in order."}
             </h1>
             <p style={{ margin: 0, maxWidth: "62ch", color: textMuted, fontSize: "1.02rem" }}>
-              {isGameActive
-              ? ""
-              : "Use the word list as your clue, then find each hidden translation in the grid."}
+              {activeMode === "setup"
+                ? "Spell each translation from scattered letters before the countdown runs out."
+                : isGameComplete
+                  ? ""
+                  : "Use the prompt, find the translation letters, and build the word before time runs out."}
             </p>
           </div>
         </section>
 
         {error &&
         error !== chooseDeckErrorMessage &&
-        !error.startsWith(notEnoughSearchableWordsPrefix) ? (
+        !error.startsWith(notEnoughWordsPrefix) ? (
           <section
             style={{
               background: "rgba(255, 77, 157, 0.12)",
@@ -691,7 +776,7 @@ export default function WordSearchPage() {
                   Game setup
                 </p>
                 <h2 style={{ margin: "8px 0 0", color: textStrong, fontSize: "1.9rem" }}>
-                  Build a word search
+                  Choose words for Word Builder
                 </h2>
               </div>
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
@@ -711,12 +796,12 @@ export default function WordSearchPage() {
                 style={{
                   border: "1px dashed rgba(130, 151, 255, 0.22)",
                   borderRadius: "22px",
-                  padding: "24px",
+                  padding: "22px",
                   color: textMuted,
                   background: "rgba(255,255,255,0.03)",
                 }}
               >
-                You need at least one deck before you can start word search.
+                You need at least one deck before you can start word builder.
               </div>
             ) : (
               <div style={{ display: "grid", gap: "18px" }}>
@@ -727,14 +812,14 @@ export default function WordSearchPage() {
                       color: "#76f7d5",
                       textTransform: "uppercase",
                       letterSpacing: "0.12em",
-                      fontSize: "0.74rem",
+                      fontSize: "0.75rem",
                     }}
                   >
-                    Pick a language
+                    Target language
                   </p>
                   <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                     {availableLanguages.map((language) => {
-                      const isActive = selectedLanguage === language;
+                      const isSelected = selectedLanguage === language;
 
                       return (
                         <button
@@ -743,18 +828,15 @@ export default function WordSearchPage() {
                           onClick={() => handleSelectLanguage(language)}
                           style={{
                             borderRadius: "999px",
-                            padding: "11px 16px",
-                            border: isActive
+                            padding: "10px 16px",
+                            border: isSelected
                               ? "1px solid rgba(118, 247, 213, 0.42)"
                               : "1px solid rgba(130, 151, 255, 0.18)",
-                            background: isActive
-                              ? "linear-gradient(180deg, rgba(72, 183, 255, 0.16), rgba(255, 77, 157, 0.1))"
+                            background: isSelected
+                              ? "linear-gradient(135deg, rgba(72, 183, 255, 0.18), rgba(255, 77, 157, 0.12))"
                               : "rgba(255,255,255,0.04)",
                             color: textStrong,
                             cursor: "pointer",
-                            boxShadow: isActive
-                              ? "0 0 22px rgba(118, 247, 213, 0.08)"
-                              : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
                           }}
                         >
                           {language}
@@ -772,10 +854,10 @@ export default function WordSearchPage() {
                         color: "#76f7d5",
                         textTransform: "uppercase",
                         letterSpacing: "0.12em",
-                        fontSize: "0.74rem",
+                        fontSize: "0.75rem",
                       }}
                     >
-                      {selectedLanguage}
+                      Decks for {selectedLanguage}
                     </p>
                     {visibleDecks.length === 0 ? (
                       <p style={{ margin: 0, color: textMuted }}>
@@ -883,7 +965,7 @@ export default function WordSearchPage() {
                             }}
                             style={{
                               borderRadius: "20px",
-                              padding: "12px 14px",
+                              padding: "14px 12px",
                               border: isSelected
                                 ? "1px solid rgba(118, 247, 213, 0.42)"
                                 : "1px solid rgba(130, 151, 255, 0.18)",
@@ -903,7 +985,112 @@ export default function WordSearchPage() {
                             <span style={{ color: textMuted, fontSize: "0.8rem" }}>
                               {gameSize.gridSize}x{gameSize.gridSize}
                             </span>
-                            
+                            <span style={{ color: textMuted, fontSize: "0.8rem" }}>
+                              Retry after {gameSize.distractionRetryCount} decoys
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: "12px" }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#76f7d5",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.12em",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      Distraction letters
+                    </p>
+                    <div className="bingo-option-grid">
+                      {[
+                        { value: false, label: "Off" },
+                        { value: true, label: "On" },
+                      ].map((option) => {
+                        const isSelected = includeDistractions === option.value;
+
+                        return (
+                          <button
+                            key={option.label}
+                            type="button"
+                            onClick={() => {
+                              setIncludeDistractions(option.value);
+                              setError("");
+                            }}
+                            style={{
+                              borderRadius: "20px",
+                              padding: "14px 12px",
+                              border: isSelected
+                                ? "1px solid rgba(118, 247, 213, 0.42)"
+                                : "1px solid rgba(130, 151, 255, 0.18)",
+                              background: isSelected
+                                ? "linear-gradient(180deg, rgba(72, 183, 255, 0.16), rgba(255, 77, 157, 0.1))"
+                                : "rgba(255,255,255,0.04)",
+                              color: textStrong,
+                              cursor: "pointer",
+                              display: "grid",
+                              gap: "4px",
+                            }}
+                          >
+                            <span>{option.label}</span>
+                            <span style={{ color: textMuted, fontSize: "0.8rem" }}>
+                              {option.value
+                                ? `${selectedGameSize.distractionCount} extra letters, retry after ${selectedGameSize.distractionRetryCount}`
+                                : "Only answer letters"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: "12px" }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#76f7d5",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.12em",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      Game speed
+                    </p>
+                    <div className="bingo-option-grid">
+                      {gameSpeeds.map((gameSpeed) => {
+                        const isSelected = selectedSpeed === gameSpeed.value;
+
+                        return (
+                          <button
+                            key={gameSpeed.value}
+                            type="button"
+                            onClick={() => {
+                              setSelectedSpeed(gameSpeed.value);
+                              setError("");
+                            }}
+                            style={{
+                              borderRadius: "20px",
+                              padding: "14px 12px",
+                              border: isSelected
+                                ? "1px solid rgba(118, 247, 213, 0.42)"
+                                : "1px solid rgba(130, 151, 255, 0.18)",
+                              background: isSelected
+                                ? "linear-gradient(180deg, rgba(72, 183, 255, 0.16), rgba(255, 77, 157, 0.1))"
+                                : "rgba(255,255,255,0.04)",
+                              color: textStrong,
+                              cursor: "pointer",
+                              display: "grid",
+                              gap: "4px",
+                            }}
+                          >
+                            <span>{gameSpeed.label}</span>
+                            <span style={{ color: textMuted, fontSize: "0.8rem" }}>
+                              {gameSpeed.seconds}s per word
+                            </span>
                           </button>
                         );
                       })}
@@ -945,14 +1132,11 @@ export default function WordSearchPage() {
                                 : "rgba(255,255,255,0.04)",
                               color: textStrong,
                               cursor: "pointer",
-                              textAlign: "center",
                             }}
                           >
-                            <span>
-                              {typeof direction.label === "function"
-                                ? direction.label(selectedLanguage)
-                                : direction.label}
-                            </span>
+                            {typeof direction.label === "function"
+                              ? direction.label(selectedLanguage)
+                              : direction.label}
                           </button>
                         );
                       })}
@@ -992,9 +1176,6 @@ export default function WordSearchPage() {
                                 : "rgba(255,255,255,0.04)",
                               color: textStrong,
                               cursor: "pointer",
-                              boxShadow: isActive
-                                ? "0 0 22px rgba(118, 247, 213, 0.08)"
-                                : "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
                             }}
                           >
                             {option.label}
@@ -1002,11 +1183,6 @@ export default function WordSearchPage() {
                         );
                       })}
                     </div>
-                    {selectedStrengths.length === 0 ? (
-                      <p style={{ margin: 0, color: "#ffb6d7", fontSize: "0.92rem" }}>
-                        Choose at least one word strength to build the game.
-                      </p>
-                    ) : null}
                   </div>
                 </section>
               </div>
@@ -1018,7 +1194,7 @@ export default function WordSearchPage() {
               </p>
             ) : null}
 
-            {error.startsWith(notEnoughSearchableWordsPrefix) ? (
+            {error.startsWith(notEnoughWordsPrefix) ? (
               <p style={{ margin: "0 0 -8px", color: "#ffb6d7", fontSize: "0.92rem" }}>
                 {error}
               </p>
@@ -1033,7 +1209,7 @@ export default function WordSearchPage() {
                 style={primaryButtonStyle}
                 disabled={gameLoading || loading || lists.length === 0}
               >
-                {gameLoading ? "Building word search..." : "Start word search"}
+                {gameLoading ? "Building word builder..." : "Start word builder"}
               </button>
               <button type="button" onClick={() => navigate("/play")} style={secondaryButtonStyle}>
                 Back to games
@@ -1055,108 +1231,126 @@ export default function WordSearchPage() {
               gap: "20px",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "12px",
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <p style={{ margin: 0, color: "#76f7d5" }}>
-                {foundWordIds.length} of {targetWords.length} words found
+            <div style={{ display: "grid", gap: "10px", textAlign: "center" }}>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#76f7d5",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.14em",
+                  fontSize: "0.76rem",
+                }}
+              >
+                Prompt
               </p>
-              <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "baseline",
+                  gap: "14px",
+                  flexWrap: "wrap",
+                  minHeight: "2.85rem",
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    color: textStrong,
+                    fontSize: "clamp(1.25rem, 3.2vw, 2.35rem)",
+                    lineHeight: 1,
+                    textShadow:
+                      "0 0 24px rgba(118, 247, 213, 0.16), 0 0 50px rgba(255, 77, 157, 0.12)",
+                  }}
+                >
+                  {currentPrompt?.promptText || "All words complete."}
+                </p>
+                {isGameActive ? (
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#76f7d5",
+                      fontSize: "clamp(1rem, 2.4vw, 1.45rem)",
+                      fontWeight: 700,
+                      minWidth: "5ch",
+                      textAlign: "left",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {formatPromptCountdown(promptSecondsRemaining)}
+                  </p>
+                ) : null}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "16px",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                <p style={{ margin: 0, color: "#76f7d5" }}>
+                  {completedIds.length} of {prompts.length} words built
+                </p>
                 <p style={{ margin: 0, color: textMuted }}>Misses: {missCount}</p>
+                <p style={{ margin: 0, color: textMuted }}>Clicks: {clickCount}</p>
                 <p style={{ margin: 0, color: textMuted }}>
                   Time: {formatElapsedTime(elapsedSeconds)}
                 </p>
               </div>
             </div>
 
-            <div className="word-search-play-area">
-              <div
-                className="word-search-grid"
-                style={{ gridTemplateColumns: `repeat(${grid.length}, minmax(0, 1fr))` }}
-              >
-                {grid.map((row, rowIndex) =>
-                  row.map((letter, colIndex) => {
-                    const key = `${rowIndex}-${colIndex}`;
-                    const isSelected = selectedCellKeys.has(key);
-                    const isFound = foundCellKeys.has(key);
-
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        className={`word-search-cell ${isSelected ? "is-selected" : ""} ${
-                          isFound ? "is-found" : ""
-                        }`}
-                        disabled={isGameComplete}
-                        onClick={() => handleCellClick(rowIndex, colIndex)}
-                      >
-                        {letter}
-                      </button>
-                    );
-                  }),
-                )}
-              </div>
-
-              <aside className="word-search-word-list">
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#76f7d5",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.12em",
-                    fontSize: "0.75rem",
-                  }}
-                >
-                  Find these translated words
-                </p>
-                <div style={{ display: "grid", gap: "8px" }}>
-                  {targetWords.map((word) => {
-                    const isFound = foundWordIds.includes(word.id);
-
-                    return (
-                      <div
-                        key={word.id}
-                        style={{
-                          border: isFound
-                            ? "1px solid rgba(118, 247, 213, 0.42)"
-                            : "1px solid rgba(130, 151, 255, 0.16)",
-                          borderRadius: "16px",
-                          padding: "10px 12px",
-                          background: isFound
-                            ? "rgba(118, 247, 213, 0.12)"
-                            : "rgba(255,255,255,0.04)",
-                          color: isFound ? "#8ff8de" : textStrong,
-                          display: "grid",
-                          gap: "3px",
-                        }}
-                      >
-                        <span style={{ textDecoration: isFound ? "line-through" : "none" }}>
-                          {word.clueText}
-                        </span>
-                        
-                      </div>
-                    );
-                  })}
-                </div>
-              </aside>
+            <div className="word-builder-answer">
+              {currentPrompt
+                ? currentPrompt.answer.split("").map((letter, index) => (
+                    <span
+                      key={`${letter}-${index}`}
+                      className={index < builtAnswer.length ? "is-filled" : ""}
+                    >
+                      {builtAnswer[index] || ""}
+                    </span>
+                  ))
+                : null}
             </div>
 
-            <p
+            <div
+              className={`word-builder-grid word-builder-grid-${selectedSize}`}
               style={{
-                margin: "-4px 0 0",
-                color: textStrong,
-                fontSize: "0.95rem",
-                textAlign: "center",
+                gridTemplateColumns: `repeat(${selectedGameSize.gridSize}, minmax(0, 1fr))`,
               }}
             >
-              {bonusChallengeText}
-            </p>
+              {currentPrompt?.letters.map((tile, index) => {
+                if (tile.isEmpty || hiddenTileIds.includes(tile.id)) {
+                  return (
+                    <span
+                      key={tile.id}
+                      className="word-builder-empty-cell"
+                      aria-hidden="true"
+                    />
+                  );
+                }
+
+                const isSelected = selectedTileIds.includes(tile.id);
+                const feedback = feedbackById[tile.id];
+
+                return (
+                  <button
+                    key={tile.id}
+                    type="button"
+                    className={`word-builder-tile word-builder-tile-${(index % 5) + 1} ${
+                      isSelected ? "is-selected" : ""
+                    } ${feedback === "correct" ? "is-correct" : ""} ${
+                      feedback === "wrong" ? "is-wrong" : ""
+                    }`}
+                    disabled={!isGameActive || isSelected || clickLocked}
+                    onClick={() => handleLetterClick(tile)}
+                  >
+                    {tile.letter}
+                  </button>
+                );
+              })}
+            </div>
 
             {!isGameComplete ? (
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
@@ -1191,54 +1385,19 @@ export default function WordSearchPage() {
                   fontSize: "0.75rem",
                 }}
               >
-                Word search results
+                Word builder results
               </p>
               <h2 style={{ margin: 0, color: textStrong, fontSize: "2rem" }}>
-                You found all {targetWords.length} words!
+                You built all {prompts.length} words!
               </h2>
+              <p style={{ margin: 0, color: textMuted }}>Clicks: {clickCount}</p>
               <p style={{ margin: 0, color: textMuted }}>Misses: {missCount}</p>
               <p style={{ margin: 0, color: textMuted }}>
                 Time: {formatElapsedTime(completedElapsedSeconds)}
               </p>
             </div>
 
-            {didBeatBonusChallenge ? (
-              <div
-                style={{
-                  border: "1px solid rgba(118, 247, 213, 0.42)",
-                  borderRadius: "24px",
-                  padding: "18px 20px",
-                  background:
-                    "linear-gradient(135deg, rgba(118, 247, 213, 0.16), rgba(72, 183, 255, 0.12), rgba(255, 77, 157, 0.1))",
-                  boxShadow:
-                    "0 0 0 1px rgba(118, 247, 213, 0.08), 0 0 34px rgba(72, 183, 255, 0.16)",
-                  display: "grid",
-                  gap: "6px",
-                }}
-              >
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#76f7d5",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.14em",
-                    fontSize: "0.78rem",
-                  }}
-                >
-                  Bonus challenge cleared
-                </p>
-                <h3 style={{ margin: 0, color: textStrong, fontSize: "1.45rem" }}>
-                  Speed-reader mode: activated.
-                </h3>
-                <p style={{ margin: 0, color: textMuted }}>
-                  You solved the {selectedGameSize.label.toLowerCase()} grid in{" "}
-                  {formatElapsedTime(completedElapsedSeconds)}, beating the{" "}
-                  {formatElapsedTime(selectedGameSize.bonusSeconds)} target.
-                </p>
-              </div>
-            ) : null}
-
-            {missCount === 0 ? (
+            {didFinishWithoutMisses ? (
               <div
                 style={{
                   border: "1px solid rgba(118, 247, 213, 0.42)",
@@ -1261,19 +1420,25 @@ export default function WordSearchPage() {
                     fontSize: "0.78rem",
                   }}
                 >
-                  Perfect search
+                  Perfect build
                 </p>
                 <h3 style={{ margin: 0, color: textStrong, fontSize: "1.45rem" }}>
-                  Laser focus. Zero misses.
+                  Every letter landed.
                 </h3>
                 <p style={{ margin: 0, color: textMuted }}>
-                  You tracked every hidden word without a single false selection.
+                  You built every answer without a wrong click or timeout.
                 </p>
               </div>
             ) : null}
 
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              <button type="button" onClick={handlePlayAgain} style={primaryButtonStyle}>
+              <button
+                type="button"
+                onClick={() => {
+                  void buildGameFromSettings();
+                }}
+                style={primaryButtonStyle}
+              >
                 Play again
               </button>
               <button type="button" onClick={handleResetToSetup} style={secondaryButtonStyle}>

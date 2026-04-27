@@ -78,6 +78,7 @@ export default function GameHubPage() {
                 padding: "22px",
                 boxShadow: panelShadow,
                 display: "grid",
+                
                 gap: "14px",
                 minHeight: "220px",
               }}

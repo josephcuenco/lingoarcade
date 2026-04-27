@@ -470,7 +470,7 @@ export default function CardMatchingPage() {
               ? ""
               : isGameComplete
                 ? ""
-                : "Pick a language, choose one or more decks, then match each word with its English translation as quickly as you can."}
+                : "Flip over two cards at a time and match each word with its translation as quickly as you can."}
             </p>
           </div>
         </section>

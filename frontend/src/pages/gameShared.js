@@ -39,7 +39,7 @@ export const gameOptions = [
   {
     name: "Word Search",
     accent: "#48b7ff",
-    description: "Find hidden vocabulary terms in a puzzle grid built from your study words.",
+    description: "Find the hidden translations of your vocab words in a grid of letters.",
     status: "available",
     path: "/play/word-search",
     buttonLabel: "Play word search",
@@ -55,14 +55,18 @@ export const gameOptions = [
   {
     name: "Crossword",
     accent: "#b388ff",
-    description: "Solve clue-based grids using the words and translations from your decks.",
-    status: "coming-soon",
+    description: "Fill out a puzzle grid with the translations of your vocab words.",
+    status: "available",
+    path: "/play/crossword",
+    buttonLabel: "Play crossword",
   },
   {
     name: "Word Builder",
     accent: "#76f7d5",
-    description: "Assemble words from fragments and practice spelling and recognition.",
-    status: "coming-soon",
+    description: "Assemble words from scattered letters and practice spelling.",
+    status: "available",
+    path: "/play/word-builder",
+    buttonLabel: "Play word builder",
   },
 ];
 
