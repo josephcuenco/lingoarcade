@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../auth/useAuth";
@@ -196,6 +196,7 @@ export default function BuildPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const deckDraftWordInputRef = useRef(null);
 
   const availableLanguages = useMemo(
     () =>
@@ -219,19 +220,23 @@ export default function BuildPage() {
       setError("");
 
       try {
-        const response = await api.get("/lists");
-        const nextLists = response.data;
+        const [listsResponse, languagesResponse] = await Promise.all([
+          api.get("/lists"),
+          api.get("/lists/languages"),
+        ]);
+        const nextLists = listsResponse.data;
+        const savedLanguageNames = languagesResponse.data.map((language) => language.name);
+        const nextLanguages = [
+          ...new Set([...savedLanguageNames, ...nextLists.map((list) => list.language)]),
+        ].sort((left, right) => left.localeCompare(right));
         setLists(nextLists);
-        setLanguages([...new Set(nextLists.map((list) => list.language))]);
+        setLanguages(nextLanguages);
         setActiveLanguage((currentLanguage) => {
-          if (
-            currentLanguage &&
-            nextLists.some((list) => list.language === currentLanguage)
-          ) {
+          if (currentLanguage && nextLanguages.includes(currentLanguage)) {
             return currentLanguage;
           }
 
-          return getDefaultLanguageFromLists(nextLists);
+          return getDefaultLanguageFromLists(nextLists) || nextLanguages[0] || "";
         });
       } catch (err) {
         if (err.response?.status === 401) {
@@ -328,6 +333,13 @@ export default function BuildPage() {
     );
   };
 
+  const focusDeckDraftWordInput = () => {
+    window.requestAnimationFrame(() => {
+      deckDraftWordInputRef.current?.focus();
+      deckDraftWordInputRef.current?.select();
+    });
+  };
+
   const handleAddDeckDraftWord = () => {
     const nextWord = {
       ...createEmptyStagedWord(),
@@ -343,6 +355,16 @@ export default function BuildPage() {
     setDeckDraftWords((currentDrafts) => [...currentDrafts, nextWord]);
     setDeckDraftWord(emptyWordForm);
     setError("");
+    focusDeckDraftWordInput();
+  };
+
+  const handleDeckDraftWordKeyDown = (event) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+    handleAddDeckDraftWord();
   };
 
   const handleRemoveDeckDraftWord = (draftId) => {
@@ -552,7 +574,7 @@ export default function BuildPage() {
     setShowAddLanguage(false);
   };
 
-  const handleCreateLanguage = () => {
+  const handleCreateLanguage = async () => {
     const trimmedLanguage = newLanguage.trim();
 
     if (!trimmedLanguage) {
@@ -564,17 +586,33 @@ export default function BuildPage() {
       (language) => language.toLowerCase() === trimmedLanguage.toLowerCase(),
     );
 
-    setLanguages((currentLanguages) =>
-      existingLanguage
-        ? currentLanguages
-        : [...currentLanguages, trimmedLanguage],
-    );
-    setActiveLanguage(existingLanguage || trimmedLanguage);
-    setShowAddLanguage(false);
-    setNewLanguage("");
-    setEditingId(null);
-    setExpandedDeckId(null);
-    setError("");
+    try {
+      const response = existingLanguage
+        ? null
+        : await api.post("/lists/languages", { language: trimmedLanguage });
+      const languageName = existingLanguage || response.data.name;
+
+      setLanguages((currentLanguages) =>
+        currentLanguages.includes(languageName)
+          ? currentLanguages
+          : [...currentLanguages, languageName].sort((left, right) =>
+              left.localeCompare(right),
+            ),
+      );
+      setActiveLanguage(languageName);
+      setShowAddLanguage(false);
+      setNewLanguage("");
+      setEditingId(null);
+      setExpandedDeckId(null);
+      setError("");
+    } catch (err) {
+      if (err.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      setError(err.response?.data?.detail || "We couldn't save that language.");
+    }
   };
 
   const handleLanguageContextMenu = (event, language) => {
@@ -626,55 +664,27 @@ export default function BuildPage() {
       return;
     }
 
-    if (currentLanguage.toLowerCase() === nextLanguage.toLowerCase()) {
-      setLanguages((currentLanguages) =>
-        currentLanguages.map((language) =>
-          language === currentLanguage ? nextLanguage : language,
-        ),
-      );
-      setLists((currentLists) =>
-        currentLists.map((list) =>
-          list.language === currentLanguage
-            ? { ...list, language: nextLanguage }
-            : list,
-        ),
-      );
-      if (activeLanguage === currentLanguage) {
-        setActiveLanguage(nextLanguage);
-      }
-      closeLanguageModal();
-      return;
-    }
-
-    const hasDecks = lists.some((list) => list.language === currentLanguage);
-
     try {
-      if (hasDecks) {
-        const response = await api.post("/lists/languages/rename", {
-          current_language: currentLanguage,
-          new_language: nextLanguage,
-        });
+      const response = await api.post("/lists/languages/rename", {
+        current_language: currentLanguage,
+        new_language: nextLanguage,
+      });
 
-        setLists((currentLists) => {
-          const untouchedLists = currentLists.filter(
-            (list) => list.language !== currentLanguage && list.language !== nextLanguage,
-          );
-          return [...response.data, ...untouchedLists];
-        });
-      } else {
-        setLists((currentLists) =>
-          currentLists.map((list) =>
-            list.language === currentLanguage
-              ? { ...list, language: nextLanguage }
-              : list,
-          ),
+      setLists((currentLists) => {
+        const untouchedLists = currentLists.filter(
+          (list) => list.language !== currentLanguage && list.language !== nextLanguage,
         );
-      }
+        return [...response.data, ...untouchedLists];
+      });
 
       setLanguages((currentLanguages) =>
-        currentLanguages.map((language) =>
-          language === currentLanguage ? nextLanguage : language,
-        ),
+        [
+          ...new Set(
+            currentLanguages.map((language) =>
+              language === currentLanguage ? nextLanguage : language,
+            ),
+          ),
+        ].sort((left, right) => left.localeCompare(right)),
       );
 
       if (activeLanguage === currentLanguage) {
@@ -700,14 +710,11 @@ export default function BuildPage() {
     }
 
     const languageToDelete = languageModal.language;
-    const hasDecks = lists.some((list) => list.language === languageToDelete);
 
     try {
-      if (hasDecks) {
-        await api.post("/lists/languages/delete", {
-          language: languageToDelete,
-        });
-      }
+      await api.post("/lists/languages/delete", {
+        language: languageToDelete,
+      });
 
       setLists((currentLists) =>
         currentLists.filter((list) => list.language !== languageToDelete),
@@ -1713,10 +1720,12 @@ export default function BuildPage() {
                   <label style={{ ...fieldStyle, color: textSoft }}>
                     <span>Word</span>
                     <input
+                      ref={deckDraftWordInputRef}
                       value={deckDraftWord.term}
                       onChange={(event) =>
                         handleDeckDraftWordChange("term", event.target.value)
                       }
+                      onKeyDown={handleDeckDraftWordKeyDown}
                       placeholder="hola"
                       style={lightInputStyle}
                     />
@@ -1729,6 +1738,7 @@ export default function BuildPage() {
                       onChange={(event) =>
                         handleDeckDraftWordChange("definition", event.target.value)
                       }
+                      onKeyDown={handleDeckDraftWordKeyDown}
                       placeholder="hello"
                       style={lightInputStyle}
                     />

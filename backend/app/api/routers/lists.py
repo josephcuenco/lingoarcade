@@ -9,15 +9,19 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.vocab_list import VocabularyList
 from app.models.vocab_word import VocabularyWord
+from app.models.user_language import UserLanguage
 # OpenAI fill-in-the-blank generation is paused while we think through the AI direction.
 # from app.services.fill_blank_sentences import generate_fill_blank_sentences
 from app.schemas.list import (
     CreateWordRequest,
+    CreateLanguageRequest,
     CreateListRequest,
     DeleteLanguageRequest,
     # GenerateFillBlankSentencesRequest,
+    LanguageResponse,
     ListResponse,
     RecordWordPerformanceRequest,
+    RecordWordPracticeRequest,
     RenameLanguageRequest,
     UpdateWordRequest,
     UpdateListRequest,
@@ -56,6 +60,33 @@ def get_owned_list_or_404(db: Session, user_id, list_id: UUID) -> VocabularyList
     return vocab_list
 
 
+def get_language_names(db: Session, user_id) -> list[str]:
+    saved_languages = db.scalars(
+        select(UserLanguage.name).where(UserLanguage.user_id == user_id)
+    ).all()
+    deck_languages = db.scalars(
+        select(VocabularyList.language).where(VocabularyList.user_id == user_id)
+    ).all()
+
+    return sorted(set(saved_languages + deck_languages), key=str.lower)
+
+
+def ensure_language_exists(db: Session, user_id, language_name: str) -> UserLanguage:
+    existing_language = db.scalar(
+        select(UserLanguage).where(
+            UserLanguage.user_id == user_id,
+            UserLanguage.name == language_name,
+        )
+    )
+
+    if existing_language:
+        return existing_language
+
+    language = UserLanguage(user_id=user_id, name=language_name)
+    db.add(language)
+    return language
+
+
 @router.post("", response_model=ListResponse)
 def create_list(
     payload: CreateListRequest,
@@ -83,6 +114,7 @@ def create_list(
         language=payload.language,
     )
 
+    ensure_language_exists(db, user.id, payload.language)
     db.add(vocab_list)
     db.commit()
     db.refresh(vocab_list)
@@ -102,6 +134,52 @@ def get_lists(
     ).all()
 
     return lists
+
+
+@router.get("/languages", response_model=list[LanguageResponse])
+def get_languages(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    for language_name in get_language_names(db, user.id):
+        ensure_language_exists(db, user.id, language_name)
+
+    db.commit()
+
+    return db.scalars(
+        select(UserLanguage)
+        .where(UserLanguage.user_id == user.id)
+        .order_by(UserLanguage.name.asc())
+    ).all()
+
+
+@router.post("/languages", response_model=LanguageResponse)
+def create_language(
+    payload: CreateLanguageRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    language_name = payload.language.strip()
+
+    if not language_name:
+        raise HTTPException(status_code=400, detail="Language name is required")
+
+    existing_language = db.scalar(
+        select(UserLanguage).where(
+            UserLanguage.user_id == user.id,
+            UserLanguage.name == language_name,
+        )
+    )
+
+    if existing_language:
+        return existing_language
+
+    language = UserLanguage(user_id=user.id, name=language_name)
+    db.add(language)
+    db.commit()
+    db.refresh(language)
+
+    return language
 
 
 @router.get("/{list_id}/words", response_model=list[WordResponse])
@@ -191,6 +269,39 @@ def record_word_performance(
     db.commit()
 
     return [words_by_id[result.word_id] for result in payload.results]
+
+
+@router.post("/words/practice", response_model=list[WordResponse])
+def record_word_practice(
+    payload: RecordWordPracticeRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    if not payload.word_ids:
+        raise HTTPException(status_code=400, detail="At least one practiced word is required")
+
+    words = db.scalars(
+        select(VocabularyWord)
+        .join(VocabularyList, VocabularyList.id == VocabularyWord.list_id)
+        .where(
+            VocabularyWord.id.in_(payload.word_ids),
+            VocabularyList.user_id == user.id,
+        )
+    ).all()
+
+    words_by_id = {word.id: word for word in words}
+
+    if len(words_by_id) != len(set(payload.word_ids)):
+        raise HTTPException(status_code=404, detail="One or more words were not found")
+
+    now = datetime.now(timezone.utc)
+
+    for word in words_by_id.values():
+        word.last_practiced_at = now
+
+    db.commit()
+
+    return [words_by_id[word_id] for word_id in payload.word_ids]
 
 
 # OpenAI fill-in-the-blank generation is paused while we think through the AI direction.
@@ -312,12 +423,28 @@ def rename_language(
             VocabularyList.language == current_language,
         )
     ).all()
+    saved_language = db.scalar(
+        select(UserLanguage).where(
+            UserLanguage.user_id == user.id,
+            UserLanguage.name == current_language,
+        )
+    )
 
-    if not language_lists:
+    if not language_lists and not saved_language:
         raise HTTPException(status_code=404, detail="Language not found")
 
     if current_language == new_language:
+        if saved_language and saved_language.name != new_language:
+            saved_language.name = new_language
+            db.commit()
         return language_lists
+
+    existing_saved_language = db.scalar(
+        select(UserLanguage).where(
+            UserLanguage.user_id == user.id,
+            UserLanguage.name == new_language,
+        )
+    )
 
     target_names = {
         vocab_list.name
@@ -343,6 +470,14 @@ def rename_language(
 
     for vocab_list in language_lists:
         vocab_list.language = new_language
+
+    if saved_language:
+        if existing_saved_language:
+            db.delete(saved_language)
+        else:
+            saved_language.name = new_language
+    elif not existing_saved_language:
+        ensure_language_exists(db, user.id, new_language)
 
     db.commit()
 
@@ -371,13 +506,22 @@ def delete_language(
             VocabularyList.language == language,
         )
     ).all()
+    saved_language = db.scalar(
+        select(UserLanguage).where(
+            UserLanguage.user_id == user.id,
+            UserLanguage.name == language,
+        )
+    )
 
-    if not language_lists:
+    if not language_lists and not saved_language:
         raise HTTPException(status_code=404, detail="Language not found")
 
     deleted_count = len(language_lists)
     for vocab_list in language_lists:
         db.delete(vocab_list)
+
+    if saved_language:
+        db.delete(saved_language)
 
     db.commit()
 

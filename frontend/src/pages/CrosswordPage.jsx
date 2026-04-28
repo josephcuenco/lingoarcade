@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../auth/useAuth";
 import {
+  buildPracticeWordIds,
   chooseDeckErrorMessage,
   formatElapsedTime,
   formatLastPlayed,
@@ -312,6 +313,7 @@ export default function CrosswordPage() {
   const [gameStartedAt, setGameStartedAt] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [completedElapsedSeconds, setCompletedElapsedSeconds] = useState(0);
+  const [performanceRecorded, setPerformanceRecorded] = useState(false);
   const [recentCrosswordIds, setRecentCrosswordIds] = useState([]);
   const boardRef = useRef(null);
   const resultsRef = useRef(null);
@@ -385,6 +387,30 @@ export default function CrosswordPage() {
       if (!silent) {
         setLoading(false);
       }
+    }
+  });
+
+  const recordGamePerformance = useEffectEvent(async (wordIds) => {
+    const practiceWordIds = buildPracticeWordIds(wordIds);
+
+    if (practiceWordIds.length === 0) {
+      return;
+    }
+
+    try {
+      await api.post("/lists/words/practice", { word_ids: practiceWordIds });
+      await loadLists({ silent: true });
+    } catch (err) {
+      if (err.response?.status === 401) {
+        logout();
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      setError(
+        err.response?.data?.detail ||
+          "We couldn't save your crossword results, but your game results are still shown here.",
+      );
     }
   });
 
@@ -490,7 +516,11 @@ export default function CrosswordPage() {
   }, [isGameComplete]);
 
   useEffect(() => {
-    if (entries.length === 0 || checkedCorrectEntryIds.length !== entries.length) {
+    if (
+      entries.length === 0 ||
+      checkedCorrectEntryIds.length !== entries.length ||
+      performanceRecorded
+    ) {
       return;
     }
 
@@ -498,10 +528,18 @@ export default function CrosswordPage() {
       ? Math.floor((Date.now() - gameStartedAt.getTime()) / 1000)
       : 0;
 
+    setPerformanceRecorded(true);
     setCompletedElapsedSeconds(finalElapsedSeconds);
     setElapsedSeconds(finalElapsedSeconds);
+    void recordGamePerformance(checkedCorrectEntryIds);
     setActiveMode("results");
-  }, [checkedCorrectEntryIds.length, entries.length, gameStartedAt]);
+  }, [
+    checkedCorrectEntryIds,
+    checkedCorrectEntryIds.length,
+    entries.length,
+    gameStartedAt,
+    performanceRecorded,
+  ]);
 
   const resetGameState = () => {
     setGrid([]);
@@ -515,6 +553,7 @@ export default function CrosswordPage() {
     setGameStartedAt(null);
     setElapsedSeconds(0);
     setCompletedElapsedSeconds(0);
+    setPerformanceRecorded(false);
   };
 
   const handleSelectLanguage = (language) => {

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../auth/useAuth";
 import {
+  buildPracticeWordIds,
   chooseDeckErrorMessage,
   formatElapsedTime,
   formatLastPlayed,
@@ -98,6 +99,7 @@ export default function CardMatchingPage() {
   const [gameStartedAt, setGameStartedAt] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [completedElapsedSeconds, setCompletedElapsedSeconds] = useState(0);
+  const [performanceRecorded, setPerformanceRecorded] = useState(false);
   const gameBoardRef = useRef(null);
   const resultsRef = useRef(null);
 
@@ -132,6 +134,30 @@ export default function CardMatchingPage() {
       if (!silent) {
         setLoading(false);
       }
+    }
+  });
+
+  const recordGamePerformance = useEffectEvent(async (wordIds) => {
+    const practiceWordIds = buildPracticeWordIds(wordIds);
+
+    if (practiceWordIds.length === 0) {
+      return;
+    }
+
+    try {
+      await api.post("/lists/words/practice", { word_ids: practiceWordIds });
+      await loadLists({ silent: true });
+    } catch (err) {
+      if (err.response?.status === 401) {
+        logout();
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      setError(
+        err.response?.data?.detail ||
+          "We couldn't save your matching results, but your game results are still shown here.",
+      );
     }
   });
 
@@ -237,7 +263,7 @@ export default function CardMatchingPage() {
   }, [isGameComplete]);
 
   useEffect(() => {
-    if (!isComplete || activeMode !== "play") {
+    if (!isComplete || activeMode !== "play" || performanceRecorded) {
       return;
     }
 
@@ -245,10 +271,12 @@ export default function CardMatchingPage() {
       ? Math.floor((Date.now() - gameStartedAt.getTime()) / 1000)
       : 0;
 
+    setPerformanceRecorded(true);
     setCompletedElapsedSeconds(finalElapsedSeconds);
     setElapsedSeconds(finalElapsedSeconds);
+    void recordGamePerformance(cards.map((card) => card.pairId));
     setActiveMode("results");
-  }, [activeMode, gameStartedAt, isComplete]);
+  }, [activeMode, cards, gameStartedAt, isComplete, performanceRecorded]);
 
   const resetGameState = () => {
     setCards([]);
@@ -258,6 +286,7 @@ export default function CardMatchingPage() {
     setGameStartedAt(null);
     setElapsedSeconds(0);
     setCompletedElapsedSeconds(0);
+    setPerformanceRecorded(false);
   };
 
   const handleSelectLanguage = (language) => {

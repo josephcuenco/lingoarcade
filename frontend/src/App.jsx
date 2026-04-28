@@ -11,6 +11,7 @@ import GameHubPage from "./pages/GameHubPage";
 import LoginPage from "./pages/LoginPage";
 import QuizPage from "./pages/QuizPage";
 import RegisterPage from "./pages/RegisterPage";
+import StatsPage from "./pages/StatsPage";
 import WordBuilderPage from "./pages/WordBuilderPage";
 import WordSearchPage from "./pages/WordSearchPage";
 
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/build" element={<BuildPage />} />
             <Route path="/quiz" element={<QuizPage />} />
             <Route path="/play" element={<GameHubPage />} />
+            <Route path="/stats" element={<StatsPage />} />
             <Route path="/play/card-matching" element={<CardMatchingPage />} />
             <Route path="/play/bingo" element={<BingoPage />} />
             <Route path="/play/word-search" element={<WordSearchPage />} />

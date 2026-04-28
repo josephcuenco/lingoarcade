@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../auth/useAuth";
 import {
+  buildPracticeWordIds,
   chooseDeckErrorMessage,
   formatElapsedTime,
   formatLastPlayed,
@@ -127,6 +128,7 @@ export default function BingoPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [promptSecondsRemaining, setPromptSecondsRemaining] = useState(0);
   const [completedElapsedSeconds, setCompletedElapsedSeconds] = useState(0);
+  const [performanceRecorded, setPerformanceRecorded] = useState(false);
   const gameBoardRef = useRef(null);
   const gameBoardScrollAnchorRef = useRef(null);
   const resultsRef = useRef(null);
@@ -170,6 +172,30 @@ export default function BingoPage() {
       if (!silent) {
         setLoading(false);
       }
+    }
+  });
+
+  const recordGamePerformance = useEffectEvent(async (wordIds) => {
+    const practiceWordIds = buildPracticeWordIds(wordIds);
+
+    if (practiceWordIds.length === 0) {
+      return;
+    }
+
+    try {
+      await api.post("/lists/words/practice", { word_ids: practiceWordIds });
+      await loadLists({ silent: true });
+    } catch (err) {
+      if (err.response?.status === 401) {
+        logout();
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      setError(
+        err.response?.data?.detail ||
+          "We couldn't save your bingo results, but your game results are still shown here.",
+      );
     }
   });
 
@@ -357,7 +383,12 @@ export default function BingoPage() {
   ]);
 
   useEffect(() => {
-    if (activeMode !== "play" || cards.length === 0 || foundIds.length !== cards.length) {
+    if (
+      activeMode !== "play" ||
+      cards.length === 0 ||
+      foundIds.length !== cards.length ||
+      performanceRecorded
+    ) {
       return;
     }
 
@@ -365,10 +396,12 @@ export default function BingoPage() {
       ? Math.floor((Date.now() - gameStartedAt.getTime()) / 1000)
       : 0;
 
+    setPerformanceRecorded(true);
     setCompletedElapsedSeconds(finalElapsedSeconds);
     setElapsedSeconds(finalElapsedSeconds);
+    void recordGamePerformance(foundIds);
     setActiveMode("results");
-  }, [activeMode, cards.length, foundIds.length, gameStartedAt]);
+  }, [activeMode, cards.length, foundIds, foundIds.length, gameStartedAt, performanceRecorded]);
 
   const resetGameState = () => {
     setCards([]);
@@ -384,6 +417,7 @@ export default function BingoPage() {
     setElapsedSeconds(0);
     setPromptSecondsRemaining(0);
     setCompletedElapsedSeconds(0);
+    setPerformanceRecorded(false);
   };
 
   const handleSelectLanguage = (language) => {
@@ -1096,7 +1130,7 @@ export default function BingoPage() {
                     }}
                   >
                     {activeMode === "preview"
-                      ? "Memorize the board before prompts begin."
+                      ? "Study the board before prompts begin."
                       : currentPrompt
                         ? currentPrompt.promptText
                         : "All prompts complete."}

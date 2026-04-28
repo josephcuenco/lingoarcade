@@ -28,6 +28,15 @@ class UpdateListRequest(BaseModel):
     language: str
 
 
+class LanguageResponse(BaseModel):
+    id: UUID
+    name: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class WordResponse(BaseModel):
     id: UUID
     term: str
@@ -58,6 +67,10 @@ class RenameLanguageRequest(BaseModel):
     new_language: str
 
 
+class CreateLanguageRequest(BaseModel):
+    language: str
+
+
 class DeleteLanguageRequest(BaseModel):
     language: str
 
@@ -69,6 +82,10 @@ class QuizResultItem(BaseModel):
 
 class RecordWordPerformanceRequest(BaseModel):
     results: list[QuizResultItem]
+
+
+class RecordWordPracticeRequest(BaseModel):
+    word_ids: list[UUID]
 
 
 # OpenAI fill-in-the-blank generation is paused while we think through the AI direction.

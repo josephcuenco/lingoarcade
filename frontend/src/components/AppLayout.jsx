@@ -6,6 +6,7 @@ const navItems = [
   { to: "/build", label: "Build", icon: "build" },
   { to: "/play", label: "Play", icon: "play" },
   { to: "/quiz", label: "Quiz", icon: "quiz" },
+  { to: "/stats", label: "Stats", icon: "stats" },
 ];
 
 function SidebarIcon({ name }) {
@@ -50,6 +51,20 @@ function SidebarIcon({ name }) {
         <path d="M6.3 12.4h3.4" />
         <circle cx="15.7" cy="11.7" r="0.75" />
         <circle cx="18.1" cy="14.2" r="0.75" />
+      </svg>
+    );
+  }
+
+  if (name === "stats") {
+    return (
+      <svg
+        className="app-sidebar-icon app-sidebar-icon-stats"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <rect x="4.5" y="4.5" width="15" height="15" rx="2.4" />
+        <path d="M7.2 15.8l3.2-3.4 2.6 2.1 3.8-5.2" />
+        <path d="M14.5 9.3h2.3v2.3" />
       </svg>
     );
   }

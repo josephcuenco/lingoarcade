@@ -31,6 +31,7 @@ export const gameOptions = [
   {
     name: "Card Matching",
     accent: "#ff79c6",
+    preview: "matching",
     description: "Flip cards, find each word and translation pair, and race your best time.",
     status: "available",
     path: "/play/card-matching",
@@ -39,6 +40,7 @@ export const gameOptions = [
   {
     name: "Word Search",
     accent: "#48b7ff",
+    preview: "word-search",
     description: "Find the hidden translations of your vocab words in a grid of letters.",
     status: "available",
     path: "/play/word-search",
@@ -47,6 +49,7 @@ export const gameOptions = [
   {
     name: "BingoBlitz",
     accent: "#ffb86c",
+    preview: "bingo",
     description: "Race the timer as prompts appear and you find each translation on the board.",
     status: "available",
     path: "/play/bingo",
@@ -55,6 +58,7 @@ export const gameOptions = [
   {
     name: "Crossword",
     accent: "#b388ff",
+    preview: "crossword",
     description: "Fill out a puzzle grid with the translations of your vocab words.",
     status: "available",
     path: "/play/crossword",
@@ -63,6 +67,7 @@ export const gameOptions = [
   {
     name: "Word Builder",
     accent: "#76f7d5",
+    preview: "word-builder",
     description: "Assemble words from scattered letters and practice spelling.",
     status: "available",
     path: "/play/word-builder",
@@ -156,6 +161,17 @@ export function formatElapsedTime(totalSeconds) {
   const seconds = safeSeconds % 60;
 
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+export function buildPracticeResults(wordIds, isCorrect = true) {
+  return [...new Set(wordIds)].map((wordId) => ({
+    word_id: wordId,
+    is_correct: isCorrect,
+  }));
+}
+
+export function buildPracticeWordIds(wordIds) {
+  return [...new Set(wordIds)];
 }
 
 // AI fill-in-the-blank is paused while we think through the OpenAI direction.
