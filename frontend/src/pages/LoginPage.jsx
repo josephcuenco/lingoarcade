@@ -10,16 +10,19 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
+    setIsLoggingIn(true);
 
     try {
       await login(email, password);
       navigate("/build");
     } catch (err) {
       setError(err.response?.data?.detail || "Login failed");
+      setIsLoggingIn(false);
     }
   };
 
@@ -56,8 +59,15 @@ export default function LoginPage() {
 
           {error ? <p className="auth-error">{error}</p> : null}
 
-          <button className="auth-submit" type="submit">
-            Log in
+          <button className="auth-submit" type="submit" disabled={isLoggingIn}>
+            {isLoggingIn ? (
+              <>
+                <span className="auth-submit-spinner" aria-hidden="true" />
+                Logging in...
+              </>
+            ) : (
+              "Log in"
+            )}
           </button>
         </form>
       }

@@ -183,6 +183,8 @@ body.gameplay-active .app-sidebar {
 .app-confirm-message {
   margin: 0;
   color: #bfc7e6;
+  font-size: 1.02rem;
+  line-height: 1.55;
 }
 
 .app-confirm-actions {
@@ -263,7 +265,7 @@ body.gameplay-active .app-sidebar {
   background: linear-gradient(180deg, rgba(20, 24, 42, 0.98), rgba(12, 15, 28, 0.98));
   color: #dce3fa;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   font-weight: 600;
   line-height: 1.45;
   opacity: 0;
@@ -339,7 +341,7 @@ body.gameplay-active .app-sidebar {
 .auth-blurb {
   margin: 0;
   max-width: 42ch;
-  font-size: 1.16rem;
+  font-size: 1.2rem;
   line-height: 1.6;
   color: #bfc7e6;
 }
@@ -382,14 +384,14 @@ body.gameplay-active .app-sidebar {
   margin: 8px 0 0;
   color: #c9d2ef;
   max-width: 60ch;
-  font-size: 0.96rem;
+  font-size: 1rem;
 }
 
 .auth-game-score,
 .auth-game-turns {
   margin: 0;
   color: #dce3fa;
-  font-size: 0.92rem;
+  font-size: 0.98rem;
 }
 
 .auth-orbit {
@@ -1474,6 +1476,7 @@ body.gameplay-active .app-sidebar {
 .auth-card-subtitle {
   margin: 0;
   color: #bfc7e6;
+  font-size: 1.02rem;
   line-height: 1.55;
 }
 
@@ -1486,7 +1489,7 @@ body.gameplay-active .app-sidebar {
   display: grid;
   gap: 8px;
   color: #d6def8;
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 
 .auth-field input {
@@ -1512,6 +1515,10 @@ body.gameplay-active .app-sidebar {
 }
 
 .auth-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   border: none;
   border-radius: 999px;
   padding: 13px 18px;
@@ -1519,6 +1526,26 @@ body.gameplay-active .app-sidebar {
   color: #f8f5ef;
   cursor: pointer;
   box-shadow: 0 18px 35px rgba(112, 85, 255, 0.3);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.auth-submit:disabled {
+  cursor: wait;
+  opacity: 0.78;
+  transform: translateY(1px);
+  box-shadow: 0 12px 26px rgba(112, 85, 255, 0.22);
+}
+
+.auth-submit-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(248, 245, 239, 0.38);
+  border-top-color: #f8f5ef;
+  border-radius: 999px;
+  animation: auth-submit-spin 0.72s linear infinite;
 }
 
 .auth-footer {
@@ -1572,6 +1599,12 @@ body.gameplay-active .app-sidebar {
       0 18px 30px rgba(0, 0, 0, 0.22),
       0 0 32px rgba(118, 247, 213, 0.3);
     filter: brightness(1);
+  }
+}
+
+@keyframes auth-submit-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
