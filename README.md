@@ -17,6 +17,38 @@ The project is designed as both a useful study tool and a portfolio-ready demons
 - Responsive dark neon UI with a fixed sidebar navigation layout
 - Deployed frontend, backend API, and PostgreSQL database for live friend testing
 
+## Screenshots
+
+### Build Page
+
+Users manage languages, decks, vocabulary words, word counts, strength groups, and recent practice activity from the Build page.
+
+![LingoArcade Build page](images/LA%20-%20buildpage.png)
+
+### Game Hub
+
+The Play section gives users a visual menu of available vocabulary practice games.
+
+![LingoArcade Game Hub](images/LA%20-%20gamehub.png)
+
+### Quiz Builder
+
+Users can customize quiz sessions by language, deck, word strength, question count, and question format.
+
+![LingoArcade Quiz Builder](images/LA%20-%20quiz%20builder.png)
+
+### Quiz In Progress
+
+Quiz sessions show one question at a time, track progress, and update word performance after completion.
+
+![LingoArcade Quiz in progress](images/LA%20-%20quiz%20in%20progress.png)
+
+### BingoBlitz
+
+BingoBlitz turns vocabulary review into a timed board game with memorization, prompts, misses, and completion tracking.
+
+![LingoArcade BingoBlitz](images/LA%20-%20bingo.png)
+
 ## Tech Stack
 
 ### Frontend
