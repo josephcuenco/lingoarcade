@@ -5,6 +5,7 @@ from sqlalchemy import pool
 
 from alembic import context
 
+from app.core.config import settings
 from app.models.base import Base
 from app.models import user, user_language, vocab_list, vocab_word  # import your models!
 
@@ -12,6 +13,7 @@ from app.models import user, user_language, vocab_list, vocab_word  # import you
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+config.set_main_option("sqlalchemy.url", settings.sqlalchemy_database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
