@@ -6,6 +6,7 @@ This directory contains the React/Vite frontend for LingoArcade.
 
 ```powershell
 npm run dev
+npm test
 npm run lint
 npm run build
 npm run preview

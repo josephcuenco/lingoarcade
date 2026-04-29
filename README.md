@@ -91,6 +91,13 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
+Run backend unit tests:
+
+```powershell
+cd backend
+.\.venv\Scripts\python -m unittest discover -s tests
+```
+
 Create a backend `.env` file locally:
 
 ```text
@@ -105,6 +112,13 @@ CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 cd frontend
 npm install
 npm run dev
+```
+
+Run frontend unit tests:
+
+```powershell
+cd frontend
+npm test
 ```
 
 Create a frontend `.env` file locally:
