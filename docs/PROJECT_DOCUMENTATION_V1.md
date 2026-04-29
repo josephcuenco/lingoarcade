@@ -55,15 +55,17 @@ This moves the project from a simple study app to a more intelligent learning pl
 
 ## 4. Current Product Direction
 
-The current app foundation already includes:
+The current app foundation includes:
 
 - authentication
 - language-based deck organization
 - word and definition management
 - a dark, colorful frontend theme
-- a game hub page with placeholder game modes
+- a fixed sidebar app layout
+- a game hub with playable study games
+- deployed friend-testing infrastructure
 
-This means the project has moved beyond scaffolding and is now in a real product-shaping phase.
+This means the project has moved beyond scaffolding and is now in an MVP / friend-testing phase.
 
 ## 5. MVP Definition
 
@@ -90,21 +92,22 @@ Can a user sign up, add vocabulary, practice it through game-like study flows, a
 
 - user chooses a deck or set of decks to practice
 - system serves study content in game or quiz formats
-- initial formats should prioritize simpler, faster-to-build experiences
+- available formats include quiz, card matching, BingoBlitz, word search, crossword, and word builder
 
 #### Session tracking
 
 - store words practiced
-- store correct versus incorrect answers
-- store score and timestamp
-- optionally track response time
+- store quiz correct versus incorrect answers
+- track word-level accuracy and strength
+- update last-practiced timestamps from quizzes and games
+- track game time, flips, misses, and bonus challenge results in the frontend game flow
 
 #### Dashboard and progress
 
 - total words studied
 - study accuracy
 - recent sessions
-- streaks or other basic learning metrics
+- streaks or other basic learning metrics as future work
 
 #### Basic deployment
 
@@ -112,40 +115,47 @@ Can a user sign up, add vocabulary, practice it through game-like study flows, a
 - deployed backend
 - cloud-hosted database
 
-## 6. Recommended MVP Game Modes
+## 6. Implemented MVP Game Modes
 
-The most practical first game modes are the ones that are easiest to generate and evaluate with text-based logic.
+The current app includes several playable practice formats connected to user vocabulary data.
 
-### Best first game modes
+### Quiz
 
-#### Quiz / translation challenge
+- multiple-choice questions
+- typed translation questions
+- true/false questions
+- configurable language, decks, strengths, question count, and question formats
+- updates word accuracy and strength
 
-- multiple choice translation prompts
-- easy to build and easy to score
-- strong fit for early AI-generated distractors
+### Card Matching
 
-#### Flashcards
+- matching pairs of vocabulary terms and translations
+- small, medium, and large board sizes
+- flip count, timer, replay, and bonus challenges
 
-- simple and useful
-- excellent baseline practice mode
-- valuable for repetition workflows
+### BingoBlitz
 
-#### Fill-in-the-blank
+- memorization phase followed by timed prompts
+- configurable game size, speed, decks, strengths, and translation direction
+- missed words repeat until completed
 
-- stronger contextual learning
-- good showcase for AI-generated example sentences
-- strong candidate for a flagship early game
+### Word Search
 
-### Game modes to delay until later
+- translations hidden in a letter grid
+- word list shows prompts to find
+- supports translation direction and bonus time challenges
 
-These are still good product ideas, but they likely need more custom generation logic, board construction, or puzzle algorithms:
+### Crossword
 
-- word search
-- crossword
-- bingo
-- word builder
+- generated crossword board from vocabulary words
+- numbered clue sections for across and down entries
+- check-puzzle flow, locked correct letters, and a bonus challenge
 
-These modes are already represented in the UI as future directions, but they do not need to be fully built for the first MVP.
+### Word Builder
+
+- prompts users to assemble the correct translation from scattered letters
+- optional distraction letters
+- timer-based rounds and replay flow
 
 ## 7. Long-Term Differentiator: AI Learning Coach
 
@@ -239,11 +249,14 @@ LingoArcade is expected to grow into a service-oriented, event-driven system.
 
 #### AI integration
 
-- OpenAI API for content generation and adaptive learning features
+- paused for now while the AI product direction is evaluated
+- potential future use for content generation and adaptive learning features
 
 #### Infrastructure
 
-- Docker and Docker Compose for local development
+- Netlify frontend deployment
+- Render backend deployment
+- Render PostgreSQL database
 - AWS-oriented deployment path for future production use
 
 ## 9. Event-Driven Architecture Direction
@@ -347,31 +360,23 @@ At a high level, the project should continue to center around these core entitie
 
 Based on the current state of the project, the best near-term priorities are:
 
-1. Connect the game page to real decks and languages
-2. Build the first actual playable study mode
-3. Track session results in the backend
-4. Start a basic dashboard for performance
-5. Decide how quiz generation should work before the larger game formats
+1. Build out the Stats page with real progress data
+2. Add study session history and trend summaries
+3. Improve mobile layout polish
+4. Refine crossword generation quality
+5. Decide whether AI-generated content belongs in the MVP or a later phase
 
-## 15. Recommended First Real Game Build
+## 15. Current MVP Status
 
-If choosing one game mode to fully implement first, the strongest option is:
+The MVP now supports the core loop:
 
-### Quiz
-
-Why:
-
-- fastest to build
-- easiest to validate
-- easiest to connect to current deck data
-- easiest to score and store
-- strongest foundation for later AI-assisted generation
-
-After quiz, the next best follow-up mode is likely:
-
-### Fill-in-the-blank
-
-It adds context and increases perceived intelligence without requiring heavy board-generation logic.
+- register or log in
+- create a language
+- create decks and vocabulary words
+- practice through quiz or game formats
+- update last-practiced activity
+- update word strength through quiz results
+- deploy the app for external testers
 
 ## 16. Documentation Intent
 

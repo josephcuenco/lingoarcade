@@ -2,18 +2,40 @@
 
 This setup gets LingoArcade online so friends can create accounts and test the app.
 
-## Recommended First Deployment
+## Current Deployment
 
-- Backend API and Postgres database: Render
-- Frontend static site: Render Static Site, Netlify, or Vercel
+- Frontend static site: Netlify
+- Backend API: Render Web Service
+- Database: Render PostgreSQL
 
 ## Backend On Render
 
 1. Push the latest code to GitHub.
-2. In Render, create a new Blueprint from this repo.
-3. Render will read `render.yaml` and create `lingoarcade-api` plus `lingoarcade-db`.
-4. When prompted for `CORS_ORIGINS`, use your deployed frontend URL.
-5. After deployment, open `/health` on the API URL and confirm it returns `{"status":"ok"}`.
+2. Create a PostgreSQL database.
+3. Create a Web Service from this repo.
+4. Use `backend` as the root directory.
+5. Add the backend environment variables below.
+6. After deployment, open `/health` on the API URL and confirm it returns `{"status":"ok"}`.
+
+Use these backend settings:
+
+```text
+Root directory: backend
+Build command: pip install -r requirements.txt
+Start command: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+Health check path: /health
+```
+
+Render free web services do not include Pre-Deploy Commands, so migrations are run at startup with `alembic upgrade head && ...`.
+
+Backend environment variables:
+
+```text
+DATABASE_URL=your-render-postgres-internal-url
+SECRET_KEY=your-long-random-secret
+DEBUG=false
+CORS_ORIGINS=https://your-netlify-site.netlify.app
+```
 
 ## Frontend
 
@@ -26,14 +48,9 @@ VITE_API_BASE_URL=https://your-lingoarcade-api.onrender.com
 Use these build settings:
 
 ```text
+Base directory: frontend
 Build command: npm run build
-Publish directory: frontend/dist
-```
-
-If the host asks for a root/base directory, use:
-
-```text
-frontend
+Publish directory: dist
 ```
 
 ## After Both Are Live
@@ -47,4 +64,6 @@ frontend
 
 - Do not commit real `.env` files.
 - `SECRET_KEY` must stay private.
-- Run `alembic upgrade head` locally after pulling migrations. Render runs it automatically before deploy.
+- Use the Render Postgres Internal Database URL for the deployed backend.
+- Run `alembic upgrade head` locally after pulling migrations.
+- The Render backend may sleep on the free tier, so the first request after inactivity can be slow.
