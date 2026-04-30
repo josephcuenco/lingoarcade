@@ -1,6 +1,6 @@
 # LingoArcade Deployment
 
-This setup gets LingoArcade online so friends can create accounts and test the app.
+Used this setup to get LingoArcade online so friends can create accounts and test the app.
 
 ## Current Deployment
 
@@ -65,5 +65,4 @@ Publish directory: dist
 - Do not commit real `.env` files.
 - `SECRET_KEY` must stay private.
 - Use the Render Postgres Internal Database URL for the deployed backend.
-- Run `alembic upgrade head` locally after pulling migrations.
 - The Render backend may sleep on the free tier, so the first request after inactivity can be slow.
