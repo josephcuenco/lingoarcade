@@ -65,7 +65,7 @@ The game hub offers multiple practice formats:
 - Word Builder: assemble translations from scattered letters before time runs out.
 
 ![LingoArcade BingoBlitz](images/LA%20-%20bingo.png)
-
+_BingoBlitz_
 
 ### Stats
 
