@@ -8,7 +8,7 @@ LingoArcade
 
 ### One-sentence description
 
-LingoArcade is a web app that helps users learn foreign language vocabulary by turning their word decks into interactive study games and tracking their progress over time.
+LingoArcade is a web app that helps users learn foreign language vocabulary by turning user-created word decks into interactive study games and tracking their progress over time.
 
 ### Problem it solves
 
@@ -25,11 +25,10 @@ The long-term goal is to help learners feel more in control of their learning, s
 
 - language learners
 - students
-- self-directed learners building personal vocabulary lists
 
 ### Why this project exists
 
-LingoArcade is being built out of a genuine interest in language learning and a desire to create a tool that is both useful to learners and strong as a technically impressive software project.
+LingoArcade was inspired by a personal passion for language learning and a desire to create a tool that is both useful to learners and strong as a technically impressive software project.
 
 ## 2. Product Vision
 
@@ -43,14 +42,13 @@ Instead of only letting a user add words and manually choose study activities, t
 - measure performance
 - adjust future study sessions based on results
 
-This moves the project from a simple study app to a more intelligent learning platform.
 
 ## 3. Core Product Goals
 
 - Let users store and organize vocabulary by language and deck
 - Let users study vocabulary through multiple game and quiz formats
 - Track learning performance over time
-- Surface progress in a motivating and readable way
+- Show user progress in a motivating and readable way
 - Eventually use AI to personalize study sessions and content generation
 
 ## 4. Current Product Direction
@@ -61,11 +59,9 @@ The current app foundation includes:
 - language-based deck organization
 - word and definition management
 - a dark, colorful frontend theme
-- a fixed sidebar app layout
 - a game hub with playable study games
 - deployed friend-testing infrastructure
 
-This means the project has moved beyond scaffolding and is now in an MVP / friend-testing phase.
 
 ## 5. MVP Definition
 
@@ -115,7 +111,7 @@ Can a user sign up, add vocabulary, practice it through game-like study flows, a
 - deployed backend
 - cloud-hosted database
 
-## 6. Implemented MVP Game Modes
+## 6. Implemented MVP Game Modes and Quiz Mode
 
 The current app includes several playable practice formats connected to user vocabulary data.
 
@@ -143,13 +139,13 @@ The current app includes several playable practice formats connected to user voc
 
 - translations hidden in a letter grid
 - word list shows prompts to find
-- supports translation direction and bonus time challenges
+- supports translation direction customization and bonus time challenges
 
 ### Crossword
 
 - generated crossword board from vocabulary words
 - numbered clue sections for across and down entries
-- check-puzzle flow, locked correct letters, and a bonus challenge
+- check-puzzle flow, and a bonus challenge
 
 ### Word Builder
 
@@ -159,7 +155,7 @@ The current app includes several playable practice formats connected to user voc
 
 ## 7. Long-Term Differentiator: AI Learning Coach
 
-The major long-term upgrade for LingoArcade is an agentic AI learning coach.
+The major long-term upgrade for LingoArcade is an AI learning coach.
 
 ### Vision
 
